@@ -21,19 +21,23 @@ jobs:
           flutter-version: '3.24.0'
 
       - name: Setup Android project
+        working-directory: src/frontend
         run: |
-          # Create a temp Flutter project to get proper Android structure
+          # Save our custom main.dart
+          cp lib/main.dart /tmp/main.dart
+          
+          # Create temp project to get proper Android structure
           cd /tmp
           flutter create --org com.afrimine --project-name afrimine_temp --platforms android afrimine_temp
           
           # Copy android directory to our project
           cp -r /tmp/afrimine_temp/android $GITHUB_WORKSPACE/src/frontend/
           
-          # Copy main.dart back (flutter create overwrites it)
-          # Our main.dart is already in the repo
+          # Restore our custom main.dart
+          cp /tmp/main.dart $GITHUB_WORKSPACE/src/frontend/lib/main.dart
           
           # Clean up
-          rm -rf /tmp/afrimine_temp
+          rm -rf /tmp/afrimine_temp /tmp/main.dart
 
       - name: Install dependencies
         working-directory: src/frontend
