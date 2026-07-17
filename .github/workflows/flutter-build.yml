@@ -1,16 +1,12 @@
-name: Build Flutter APK
+name: Build APK
 
 on:
   push:
     branches: [main]
   workflow_dispatch:
 
-env:
-  FLUTTER_VERSION: '3.24.0'
-
 jobs:
-  build-apk:
-    name: Build Android APK
+  build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -22,16 +18,22 @@ jobs:
 
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: ${{ env.FLUTTER_VERSION }}
-          cache: true
+          flutter-version: '3.24.0'
 
-      - name: Create Flutter Android project
-        working-directory: src/frontend
+      - name: Setup Android project
         run: |
-          # If android directory is incomplete, recreate it
-          if [ ! -f android/app/build.gradle.kts ] && [ ! -f android/app/build.gradle ]; then
-            flutter create --org com.afrimine --project-name afrimine_ai --platforms android .
-          fi
+          # Create a temp Flutter project to get proper Android structure
+          cd /tmp
+          flutter create --org com.afrimine --project-name afrimine_temp --platforms android afrimine_temp
+          
+          # Copy android directory to our project
+          cp -r /tmp/afrimine_temp/android $GITHUB_WORKSPACE/src/frontend/
+          
+          # Copy main.dart back (flutter create overwrites it)
+          # Our main.dart is already in the repo
+          
+          # Clean up
+          rm -rf /tmp/afrimine_temp
 
       - name: Install dependencies
         working-directory: src/frontend
@@ -44,20 +46,6 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: afrimine-apk-${{ github.run_number }}
+          name: afrimine-apk
           path: src/frontend/build/app/outputs/flutter-apk/app-release.apk
           retention-days: 90
-
-      - name: Create Release
-        if: success()
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: v${{ github.run_number }}
-          name: AfriMine AI v${{ github.run_number }}
-          body: |
-            ## AfriMine AI — Build ${{ github.run_number }}
-            - **APK**: Download `app-release.apk` below
-            - Install on Android device
-            ---
-            Built for Nyatike, Migori County, Kenya 🇰🇪
-          files: src/frontend/build/app/outputs/flutter-apk/app-release.apk
