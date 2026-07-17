@@ -63,7 +63,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   style: TextStyle(
                     color: AppColors.textSecondary,
                     fontSize: 16,
-                    fontFamily: 'Poppins',
+                    
                   ),
                 ),
               ),
@@ -159,7 +159,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
-                        fontFamily: 'Poppins',
+                        
                       ),
                     ),
                   ),

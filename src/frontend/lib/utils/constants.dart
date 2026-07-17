@@ -92,47 +92,47 @@ class AppTextStyles {
     fontSize: 28,
     fontWeight: FontWeight.bold,
     color: AppColors.textPrimary,
-    fontFamily: 'Poppins',
+    
   );
 
   static const TextStyle heading2 = TextStyle(
     fontSize: 22,
     fontWeight: FontWeight.w600,
     color: AppColors.textPrimary,
-    fontFamily: 'Poppins',
+    
   );
 
   static const TextStyle heading3 = TextStyle(
     fontSize: 18,
     fontWeight: FontWeight.w600,
     color: AppColors.textPrimary,
-    fontFamily: 'Poppins',
+    
   );
 
   static const TextStyle body = TextStyle(
     fontSize: 14,
     fontWeight: FontWeight.normal,
     color: AppColors.textPrimary,
-    fontFamily: 'Poppins',
+    
   );
 
   static const TextStyle bodySmall = TextStyle(
     fontSize: 12,
     fontWeight: FontWeight.normal,
     color: AppColors.textSecondary,
-    fontFamily: 'Poppins',
+    
   );
 
   static const TextStyle button = TextStyle(
     fontSize: 16,
     fontWeight: FontWeight.w600,
-    fontFamily: 'Poppins',
+    
   );
 
   static const TextStyle caption = TextStyle(
     fontSize: 11,
     fontWeight: FontWeight.normal,
     color: AppColors.textSecondary,
-    fontFamily: 'Poppins',
+    
   );
 }

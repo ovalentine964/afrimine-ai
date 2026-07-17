@@ -145,7 +145,7 @@ class SampleDetailScreen extends StatelessWidget {
             style: TextStyle(
               color: statusColor,
               fontWeight: FontWeight.w600,
-              fontFamily: 'Poppins',
+              
             ),
           ),
           const Spacer(),

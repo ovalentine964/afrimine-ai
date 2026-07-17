@@ -68,7 +68,7 @@ class StatCard extends StatelessWidget {
                   fontSize: 24,
                   fontWeight: FontWeight.bold,
                   color: cardColor,
-                  fontFamily: 'Poppins',
+                  
                 ),
               ),
               const SizedBox(height: 2),

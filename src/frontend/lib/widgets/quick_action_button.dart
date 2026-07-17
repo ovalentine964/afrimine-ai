@@ -47,7 +47,7 @@ class QuickActionButton extends StatelessWidget {
                 fontSize: 11,
                 fontWeight: FontWeight.w500,
                 color: btnColor,
-                fontFamily: 'Poppins',
+                
               ),
               textAlign: TextAlign.center,
               maxLines: 2,

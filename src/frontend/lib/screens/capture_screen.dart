@@ -438,7 +438,7 @@ class _CaptureScreenState extends State<CaptureScreen> {
                             : const Icon(Icons.upload),
                         label: Text(
                           samples.isLoading ? 'Analyzing...' : 'Submit Sample',
-                          style: const TextStyle(fontSize: 16, fontFamily: 'Poppins'),
+                          style: const TextStyle(fontSize: 16, ),
                         ),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.primary,

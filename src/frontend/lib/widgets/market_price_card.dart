@@ -58,7 +58,7 @@ class MarketPriceCard extends StatelessWidget {
                 fontSize: 22,
                 fontWeight: FontWeight.bold,
                 color: _getMineralColor(),
-                fontFamily: 'Poppins',
+                
               ),
             ),
             const SizedBox(height: 2),

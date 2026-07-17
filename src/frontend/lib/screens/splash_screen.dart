@@ -118,7 +118,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                           fontSize: 36,
                           fontWeight: FontWeight.bold,
                           color: Colors.white,
-                          fontFamily: 'Poppins',
+                          
                           letterSpacing: 1.2,
                         ),
                       ),
@@ -128,7 +128,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                         style: TextStyle(
                           fontSize: 16,
                           color: Colors.white.withOpacity(0.85),
-                          fontFamily: 'Poppins',
+                          
                           letterSpacing: 0.5,
                         ),
                       ),

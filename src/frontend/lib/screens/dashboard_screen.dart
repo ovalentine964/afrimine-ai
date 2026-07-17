@@ -78,7 +78,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               fontSize: 22,
                               fontWeight: FontWeight.bold,
                               color: Colors.white,
-                              fontFamily: 'Poppins',
+                              
                             ),
                           ),
                           const SizedBox(height: 4),
@@ -87,7 +87,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             style: TextStyle(
                               fontSize: 14,
                               color: Colors.white.withOpacity(0.8),
-                              fontFamily: 'Poppins',
+                              
                             ),
                           ),
                         ],
@@ -365,7 +365,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
                 color: color,
-                fontFamily: 'Poppins',
+                
               ),
             ),
             const SizedBox(height: 4),
@@ -389,8 +389,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
       type: BottomNavigationBarType.fixed,
       selectedItemColor: AppColors.primary,
       unselectedItemColor: AppColors.textSecondary,
-      selectedLabelStyle: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w500, fontSize: 11),
-      unselectedLabelStyle: const TextStyle(fontFamily: 'Poppins', fontSize: 11),
+      selectedLabelStyle: const TextStyle( fontWeight: FontWeight.w500, fontSize: 11),
+      unselectedLabelStyle: const TextStyle( fontSize: 11),
       onTap: (index) {
         switch (index) {
           case 0:

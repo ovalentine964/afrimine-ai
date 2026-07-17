@@ -54,7 +54,7 @@ class AfriMineApp extends StatelessWidget {
                 seedColor: const Color(0xFF2E7D32),
                 brightness: Brightness.light,
               ),
-              fontFamily: 'Poppins',
+              
               useMaterial3: true,
               appBarTheme: const AppBarTheme(
                 centerTitle: true,
@@ -83,7 +83,7 @@ class AfriMineApp extends StatelessWidget {
                 seedColor: const Color(0xFF2E7D32),
                 brightness: Brightness.dark,
               ),
-              fontFamily: 'Poppins',
+              
               useMaterial3: true,
             ),
             themeMode: settings.themeMode,

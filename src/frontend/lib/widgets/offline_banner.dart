@@ -57,7 +57,7 @@ class _OfflineBannerState extends State<OfflineBanner> {
                         style: TextStyle(
                           color: Colors.white,
                           fontSize: 13,
-                          fontFamily: 'Poppins',
+                          
                         ),
                       ),
                     ),

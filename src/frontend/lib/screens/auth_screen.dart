@@ -118,7 +118,7 @@ class _AuthScreenState extends State<AuthScreen> {
                       fontSize: 28,
                       fontWeight: FontWeight.bold,
                       color: Colors.white,
-                      fontFamily: 'Poppins',
+                      
                     ),
                   ),
                 ),
@@ -202,7 +202,7 @@ class _AuthScreenState extends State<AuthScreen> {
                                           style: TextStyle(
                                             fontSize: 16,
                                             fontWeight: FontWeight.w600,
-                                            fontFamily: 'Poppins',
+                                            
                                           ),
                                         ),
                                 );
@@ -219,7 +219,7 @@ class _AuthScreenState extends State<AuthScreen> {
                                 fontSize: 28,
                                 fontWeight: FontWeight.bold,
                                 letterSpacing: 12,
-                                fontFamily: 'Poppins',
+                                
                               ),
                               decoration: InputDecoration(
                                 hintText: '------',
@@ -263,7 +263,7 @@ class _AuthScreenState extends State<AuthScreen> {
                                               style: TextStyle(
                                                 fontSize: 16,
                                                 fontWeight: FontWeight.w600,
-                                                fontFamily: 'Poppins',
+                                                
                                               ),
                                             ),
                                     ),
@@ -298,7 +298,7 @@ class _AuthScreenState extends State<AuthScreen> {
                   style: TextStyle(
                     color: Colors.white.withOpacity(0.7),
                     fontSize: 12,
-                    fontFamily: 'Poppins',
+                    
                   ),
                   textAlign: TextAlign.center,
                 ),
