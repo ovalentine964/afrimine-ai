@@ -1,0 +1,64 @@
+# AfriMine AI — Supabase Configuration
+# https://supabase.com/docs/guides/cli/config
+
+[project]
+id = "afrimine-ai"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 5432
+major_version = 15
+
+[studio]
+enabled = true
+port = 54323
+
+[auth]
+enabled = true
+site_url = "https://afrimine.ai"
+additional_redirect_urls = [
+  "https://afrimine.pages.dev",
+  "http://localhost:3000"
+]
+jwt_expiry = 86400
+enable_signup = true
+
+[auth.email]
+enable_signup = true
+double_confirm_changes = true
+enable_confirmations = false   # Set true in production
+
+[auth.sms]
+enable_signup = true
+enable_confirmations = true
+# Twilio config (set in Supabase dashboard)
+# twilio_account_sid = ""
+# twilio_auth_token = ""
+# twilio_message_service_sid = ""
+
+[auth.external.google]
+enabled = true
+client_id = ""
+secret = ""
+redirect_uri = ""
+
+[storage]
+enabled = true
+file_size_limit = "20MiB"
+
+[storage.buckets.afrimine-samples]
+public = false
+file_size_limit = "20MiB"
+allowed_mime_types = ["image/jpeg", "image/png", "image/webp", "audio/webm"]
+
+[realtime]
+enabled = true
+
+[analytics]
+enabled = false

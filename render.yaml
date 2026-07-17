@@ -1,0 +1,73 @@
+# AfriMine AI — Render.com Blueprint
+# https://render.com/docs/blueprint-spec
+
+services:
+  # ── Go Backend ─────────────────────────────────────────
+  - type: web
+    name: afrimine-backend
+    runtime: docker
+    dockerfilePath: docker/backend.Dockerfile
+    region: frankfurt      # Closest to Kenya
+    plan: free
+    branch: main
+    healthCheckPath: /health
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: LOG_LEVEL
+        value: warn
+      - key: LOG_FORMAT
+        value: json
+      - key: DATABASE_URL
+        sync: false          # Set in dashboard
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: SENTRY_DSN
+        sync: false
+      - key: REDIS_URL
+        fromService:
+          name: afrimine-redis
+          property: connectionString
+
+  # ── Python AI Engine ───────────────────────────────────
+  - type: web
+    name: afrimine-ai-engine
+    runtime: docker
+    dockerfilePath: docker/ai-engine.Dockerfile
+    region: frankfurt
+    plan: free
+    branch: main
+    healthCheckPath: /health
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: LOG_LEVEL
+        value: warn
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: MISTRAL_API_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+      - key: SENTRY_DSN
+        sync: false
+
+  # ── Redis ──────────────────────────────────────────────
+  - type: redis
+    name: afrimine-redis
+    plan: free
+    region: frankfurt
+    ipAccess: []
+    maxmemoryPolicy: allkeys-lru

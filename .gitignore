@@ -56,3 +56,12 @@ logs/
 
 # Node
 node_modules/
+
+# Backups
+backups/
+
+# Docker local SSL
+docker/nginx/ssl/
+
+# Supabase
+.supabase/

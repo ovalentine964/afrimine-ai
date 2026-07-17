@@ -1,0 +1,98 @@
+# AfriMine AI — Local Development
+# docker compose up --build
+
+version: "3.9"
+
+services:
+  # ── Go Backend API ──────────────────────────────────
+  backend:
+    build:
+      context: .
+      dockerfile: docker/backend.Dockerfile
+    container_name: afrimine-backend
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env
+    environment:
+      - GIN_MODE=debug
+      - LOG_LEVEL=debug
+    volumes:
+      - ./src/backend:/app/src:ro
+      - backend-data:/app/data
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - afrimine
+    restart: unless-stopped
+
+  # ── Python AI Engine ────────────────────────────────
+  ai-engine:
+    build:
+      context: .
+      dockerfile: docker/ai-engine.Dockerfile
+    container_name: afrimine-ai-engine
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      - LOG_LEVEL=debug
+    volumes:
+      - ./src/ai-engine:/app/src:ro
+      - ai-models:/app/models
+      - ai-cache:/app/cache
+    networks:
+      - afrimine
+    restart: unless-stopped
+
+  # ── PostgreSQL (local dev — Supabase in prod) ───────
+  db:
+    image: supabase/postgres:15.1.0
+    container_name: afrimine-db
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: afrimine
+      POSTGRES_PASSWORD: afrimine_dev_pass
+      POSTGRES_DB: afrimine
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./supabase/migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U afrimine -d afrimine"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - afrimine
+    restart: unless-stopped
+
+  # ── Redis (caching & queue) ─────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: afrimine-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - afrimine
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  redis-data:
+  backend-data:
+  ai-models:
+  ai-cache:
+
+networks:
+  afrimine:
+    driver: bridge

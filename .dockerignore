@@ -1,0 +1,50 @@
+# Git
+.git
+.gitignore
+
+# Documentation
+docs/
+*.md
+LICENSE
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Data
+data/
+backups/
+
+# Logs
+logs/
+*.log
+
+# Env files (secrets)
+.env
+.env.*
+!.env.example
+
+# Docker
+docker-compose*.yml
+docker/nginx/
+
+# Frontend (built separately)
+src/frontend/
+
+# Python virtual env
+src/ai-engine/venv/
+src/ai-engine/__pycache__/
+src/ai-engine/**/__pycache__/
+
+# Test files
+**/tests/
+**/*_test.go
+
+# Build artifacts
+build/
+dist/
+out/
