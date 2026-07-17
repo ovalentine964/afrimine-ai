@@ -5,7 +5,6 @@ version: 1.0.0+1
 
 environment:
   sdk: '>=3.2.0 <4.0.0'
-  flutter: '>=3.19.0'
 
 dependencies:
   flutter:
@@ -33,7 +32,6 @@ dependencies:
   # Camera & Media
   camera: ^0.11.0+1
   image_picker: ^1.1.2
-  image: ^4.2.0
 
   # Location
   geolocator: ^12.0.0
@@ -42,7 +40,6 @@ dependencies:
   # Maps
   flutter_map: ^7.0.2
   latlong2: ^0.9.1
-  flutter_map_cancellable_tile_provider: ^3.0.1
 
   # PDF Generation
   pdf: ^3.11.1
@@ -52,16 +49,11 @@ dependencies:
   fl_chart: ^0.68.0
 
   # UI Components
-  flutter_svg: ^2.0.10+1
   cached_network_image: ^3.3.1
   shimmer: ^3.0.0
-  flutter_animate: ^4.5.0
-  lottie: ^3.1.0
 
   # Storage & Cache
   shared_preferences: ^2.2.3
-  hive: ^2.2.3
-  hive_flutter: ^1.1.0
 
   # Utils
   intl: ^0.19.0
@@ -69,19 +61,11 @@ dependencies:
   connectivity_plus: ^6.0.3
   permission_handler: ^11.3.1
   url_launcher: ^6.2.5
-  share_plus: ^9.0.0
-  package_info_plus: ^8.0.0
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^4.0.0
-  build_runner: ^2.4.9
-  json_serializable: ^6.8.0
 
 flutter:
   uses-material-design: true
-
-  assets:
-    - assets/images/
-    - assets/icons/
