@@ -8,6 +8,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -23,31 +25,44 @@ jobs:
       - name: Build
         working-directory: src/frontend
         run: |
-          # Save our code
           mkdir -p /tmp/afrimine_save
           cp -r lib /tmp/afrimine_save/
           cp pubspec.yaml /tmp/afrimine_save/
-          
-          # Create fresh Flutter project in temp dir
           cd /tmp
           flutter create --org com.afrimine --project-name afrimine_build --platforms android afrimine_build
-          
-          # Copy our code into the fresh project
           cp -r /tmp/afrimine_save/lib/* /tmp/afrimine_build/lib/
           cp /tmp/afrimine_save/pubspec.yaml /tmp/afrimine_build/
-          
-          # Build
           cd /tmp/afrimine_build
           flutter pub get
           flutter build apk --release
-          
-          # Copy APK back
-          mkdir -p $GITHUB_WORKSPACE/build
           cp build/app/outputs/flutter-apk/app-release.apk $GITHUB_WORKSPACE/
 
-      - name: Upload APK
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: afrimine-apk
           path: app-release.apk
           retention-days: 90
+
+      - name: Create Release with APK
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ github.run_number }}
+          name: AfriMine AI v${{ github.run_number }}
+          body: |
+            ## AfriMine AI — Build ${{ github.run_number }}
+
+            ### 📱 Download & Install
+            1. Download `app-release.apk` below
+            2. Open on your Android phone
+            3. Allow "Install from unknown sources" if prompted
+            4. Install and open
+
+            ### What's in this build
+            ${{ github.event.head_commit.message }}
+
+            ---
+            Built for Nyatike, Migori County, Kenya 🇰🇪
+          files: app-release.apk
+          draft: false
+          prerelease: false
