@@ -238,17 +238,31 @@ class StructuralAnalyzer:
         water_mask = ndwi > threshold
 
         # Skeletonize to get drainage lines
-        from skimage.morphology import skeletonize
-        skeleton = skeletonize(water_mask).astype(np.uint8)
+        try:
+            from skimage.morphology import skeletonize
+            skeleton = skeletonize(water_mask).astype(np.uint8)
+        except ImportError:
+            logger.warning(
+                "scikit-image not available for skeletonize, "
+                "using erosion-based approximation"
+            )
+            # Fallback: thin the water mask with erosion
+            kernel = np.ones((3, 3), dtype=np.uint8)
+            skeleton = water_mask.astype(np.uint8)
+            for _ in range(3):
+                eroded = ndimage.binary_erosion(skeleton, structure=kernel).astype(np.uint8)
+                if np.sum(eroded) == 0:
+                    break
+                skeleton = eroded
 
         # Count junctions (intersections)
         kernel = np.array([[1, 1, 1], [1, 10, 1], [1, 1, 1]], dtype=np.uint8)
         convolved = ndimage.convolve(skeleton, kernel)
-        junctions = np.sum(convolved >= 13)  # >2 neighbors + center
+        junctions = int(np.sum(convolved >= 13))  # >2 neighbors + center
 
         # Estimate drainage density
         total_pixels = ndwi.size
-        drainage_pixels = np.sum(skeleton)
+        drainage_pixels = int(np.sum(skeleton))
         density = drainage_pixels / total_pixels if total_pixels > 0 else 0
 
         # Estimate flow directions (gradient-based)
@@ -263,8 +277,8 @@ class StructuralAnalyzer:
 
         result = {
             "drainage_density": float(density),
-            "total_drainage_pixels": int(drainage_pixels),
-            "junction_count": int(junctions),
+            "total_drainage_pixels": drainage_pixels,
+            "junction_count": junctions,
             "dominant_flow_direction": float(dominant_flow),
             "water_area_fraction": float(np.sum(water_mask) / total_pixels),
             "skeleton": skeleton,

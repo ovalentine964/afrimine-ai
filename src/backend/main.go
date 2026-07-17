@@ -42,6 +42,7 @@ func main() {
 	// Database connection
 	ctx := context.Background()
 	db, err := database.New(ctx, database.Config{
+		URL:      cfg.DatabaseURL,
 		Host:     cfg.DBHost,
 		Port:     cfg.DBPort,
 		User:     cfg.DBUser,
@@ -125,6 +126,7 @@ func main() {
 // Config holds application configuration
 type Config struct {
 	Port          int
+	DatabaseURL   string // Preferred: full DATABASE_URL
 	DBHost        string
 	DBPort        int
 	DBUser        string
@@ -142,12 +144,13 @@ type Config struct {
 func loadConfig() Config {
 	return Config{
 		Port:          getEnvInt("PORT", 8080),
+		DatabaseURL:   getEnv("DATABASE_URL", ""),
 		DBHost:        getEnv("DB_HOST", "localhost"),
 		DBPort:        getEnvInt("DB_PORT", 5432),
-		DBUser:        getEnv("DB_USER", "postgres"),
-		DBPassword:    getEnv("DB_PASSWORD", "postgres"),
+		DBUser:        getEnv("DB_USER", ""),
+		DBPassword:    getEnv("DB_PASSWORD", ""),
 		DBName:        getEnv("DB_NAME", "afrimine"),
-		DBSSLMode:     getEnv("DB_SSLMODE", "disable"),
+		DBSSLMode:     getEnv("DB_SSLMODE", "require"),
 		JWTSecret:     getEnv("JWT_SECRET", ""),
 		GeminiAPIKey:  getEnv("GEMINI_API_KEY", ""),
 		GeminiModel:   getEnv("GEMINI_MODEL", "gemini-2.0-flash"),

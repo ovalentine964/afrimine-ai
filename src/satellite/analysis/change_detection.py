@@ -101,15 +101,15 @@ class ChangeDetector:
         ndvi_diff = ndvi_after - ndvi_before
 
         # Vegetation loss: significant negative change
-        veg_loss = ndvi_diff < threshold
+        veg_loss = (ndvi_diff < threshold)
 
         # Vegetation gain: significant positive change
-        veg_gain = ndvi_diff > abs(threshold)
+        veg_gain = (ndvi_diff > abs(threshold))
 
-        # Statistics
+        # Statistics — use explicit int() conversion for numpy bool arrays
         total = ndvi_diff.size
-        n_loss = np.sum(veg_loss)
-        n_gain = np.sum(veg_gain)
+        n_loss = int(np.sum(veg_loss))
+        n_gain = int(np.sum(veg_gain))
 
         stats = {
             "ndvi_mean_change": float(np.mean(ndvi_diff)),
@@ -215,7 +215,7 @@ class ChangeDetector:
         else:
             threshold = np.percentile(combined, 95)
 
-        binary = combined > threshold
+        binary = (combined > threshold)
 
         # NDVI change if available
         ndvi_change = None
@@ -312,8 +312,14 @@ class ChangeDetector:
     @staticmethod
     def _otsu_threshold(data: np.ndarray) -> float:
         """Compute Otsu's optimal threshold."""
-        from skimage.filters import threshold_otsu
         try:
-            return threshold_otsu(data)
+            from skimage.filters import threshold_otsu
+            return float(threshold_otsu(data))
+        except ImportError:
+            logger.warning(
+                "scikit-image not available for Otsu threshold, "
+                "falling back to mean+std heuristic"
+            )
+            return float(np.mean(data) + np.std(data))
         except Exception:
-            return np.mean(data) + np.std(data)
+            return float(np.mean(data) + np.std(data))

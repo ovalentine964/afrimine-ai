@@ -44,7 +44,13 @@ def bbox_to_geometry(bbox: Tuple[float, float, float, float]) -> Dict:
 
 def bbox_to_ee_geometry(bbox: Tuple[float, float, float, float]):
     """Convert bounding box to Earth Engine geometry."""
-    import ee
+    try:
+        import ee
+    except ImportError:
+        raise RuntimeError(
+            "earthengine-api not installed. Cannot create EE geometry. "
+            "Install with: pip install earthengine-api"
+        )
     return ee.Geometry.Rectangle([bbox[0], bbox[1], bbox[2], bbox[3]])
 
 
@@ -107,7 +113,11 @@ def mask_clouds_s2(image):
     """
     Apply cloud mask to Sentinel-2 image using QA60 band.
     """
-    import ee
+    try:
+        import ee
+    except ImportError:
+        logger.error("earthengine-api not installed; cannot mask clouds.")
+        return image
     qa = image.select("QA60")
     # Bits 10 and 11 are clouds and cirrus
     cloud_bit_mask = 1 << 10

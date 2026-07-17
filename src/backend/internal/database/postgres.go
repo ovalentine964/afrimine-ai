@@ -17,6 +17,7 @@ type DB struct {
 
 // Config holds database configuration
 type Config struct {
+	URL     string // Full DATABASE_URL connection string
 	Host     string
 	Port     int
 	User     string
@@ -27,10 +28,15 @@ type Config struct {
 
 // New creates a new database connection
 func New(ctx context.Context, cfg Config) (*DB, error) {
-	dsn := fmt.Sprintf(
-		"host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
-		cfg.Host, cfg.Port, cfg.User, cfg.Password, cfg.DBName, cfg.SSLMode,
-	)
+	var dsn string
+	if cfg.URL != "" {
+		dsn = cfg.URL
+	} else {
+		dsn = fmt.Sprintf(
+			"host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
+			cfg.Host, cfg.Port, cfg.User, cfg.Password, cfg.DBName, cfg.SSLMode,
+		)
+	}
 
 	poolCfg, err := pgxpool.ParseConfig(dsn)
 	if err != nil {

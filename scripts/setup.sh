@@ -37,11 +37,44 @@ command -v supabase &>/dev/null && log "Supabase CLI found" || warn "Supabase CL
 # ── Create .env from example ─────────────────────────────
 if [ ! -f .env ]; then
     cp .env.example .env
-    log "Created .env from .env.example"
+    chmod 600 .env
+    log "Created .env from .env.example (permissions set to 600)"
     warn "Edit .env and fill in your API keys before running"
 else
     warn ".env already exists, skipping"
+    # Ensure existing .env has secure permissions
+    chmod 600 .env 2>/dev/null || true
 fi
+
+# ── Validate environment variables ───────────────────────
+validate_env() {
+    local file="$1"
+    local missing=0
+    local required_vars=(
+        "SUPABASE_URL"
+        "SUPABASE_ANON_KEY"
+        "DATABASE_URL"
+        "JWT_SECRET"
+    )
+
+    for var in "${required_vars[@]}"; do
+        if ! grep -q "^${var}=.\+" "$file" 2>/dev/null; then
+            warn "Missing required env var: $var"
+            ((missing++))
+        elif grep -q "^${var}=your-\|^${var}=CHANGE_ME\|^${var}=eyJ\.\.\.\|^${var}=AIza\.\.\.\|^${var}=gsk_\.\.\." "$file" 2>/dev/null; then
+            warn "$var still has placeholder value — update before deploying"
+            ((missing++))
+        fi
+    done
+
+    if [ "$missing" -gt 0 ]; then
+        warn "$missing env var(s) need attention in $file"
+    else
+        log "Environment validation passed"
+    fi
+}
+
+validate_env .env
 
 # ── Create directories ───────────────────────────────────
 mkdir -p data/{raw,processed}

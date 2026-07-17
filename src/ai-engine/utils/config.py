@@ -55,12 +55,21 @@ class GeostatConfig:
 
 
 @dataclass
+class DatabaseConfig:
+    """Supabase database configuration."""
+    supabase_url: str = ""
+    supabase_key: str = ""
+    enabled: bool = False
+
+
+@dataclass
 class AfriMineConfig:
     """Root configuration for the entire system."""
     model: ModelConfig = field(default_factory=ModelConfig)
     agents: AgentConfig = field(default_factory=AgentConfig)
     satellite: SatelliteConfig = field(default_factory=SatelliteConfig)
     geostat: GeostatConfig = field(default_factory=GeostatConfig)
+    database: DatabaseConfig = field(default_factory=DatabaseConfig)
     data_dir: Path = BASE_DIR / "data"
     output_dir: Path = BASE_DIR / "output"
     log_level: str = "INFO"
@@ -112,11 +121,22 @@ def load_config(config_path: Optional[str] = None) -> AfriMineConfig:
             max_range_km=geo_raw.get("max_range_km", cfg.geostat.max_range_km),
         )
 
+        db_raw = raw.get("database", {})
+        cfg.database = DatabaseConfig(
+            supabase_url=db_raw.get("supabase_url", ""),
+            supabase_key=db_raw.get("supabase_key", ""),
+            enabled=db_raw.get("enabled", False),
+        )
+
     # Environment overrides (secrets always from env)
     cfg.agents.gemini_api_key = os.environ.get("GEMINI_API_KEY", cfg.agents.gemini_api_key)
     cfg.satellite.sentinel_hub_id = os.environ.get("SENTINEL_HUB_ID", cfg.satellite.sentinel_hub_id)
     cfg.satellite.sentinel_hub_secret = os.environ.get("SENTINEL_HUB_SECRET", cfg.satellite.sentinel_hub_secret)
     cfg.model.device = os.environ.get("AFRIMINE_DEVICE", cfg.model.device)
+    cfg.database.supabase_url = os.environ.get("SUPABASE_URL", cfg.database.supabase_url)
+    cfg.database.supabase_key = os.environ.get("SUPABASE_KEY", cfg.database.supabase_key)
+    if cfg.database.supabase_url and cfg.database.supabase_key:
+        cfg.database.enabled = True
 
     # Ensure directories exist
     cfg.data_dir.mkdir(parents=True, exist_ok=True)

@@ -34,10 +34,21 @@ def geo_to_pixel(x: float, y: float, transform) -> Tuple[int, int]:
 def create_buffer_geometry(center: Tuple[float, float],
                            radius_m: float) -> dict:
     """Create circular buffer geometry around a point (lon, lat)."""
-    from shapely.geometry import Point
-    from shapely.ops import transform as shapely_transform
-    from functools import partial
+    from shapely.geometry import Point, mapping
     import pyproj
+
+    # Shapely 2.x / 1.x compatible transform
+    try:
+        from shapely import transform as _shapely_v2_transform
+        _SHAPELY_V2 = True
+    except ImportError:
+        from shapely.ops import transform as _shapely_v1_transform
+        _SHAPELY_V2 = False
+
+    def _compat_transform(func, geom):
+        if _SHAPELY_V2:
+            return _shapely_v2_transform(geom, func)
+        return _shapely_v1_transform(func, geom)
 
     point = Point(center[0], center[1])
     # Project to UTM for metric buffer
@@ -47,18 +58,21 @@ def create_buffer_geometry(center: Tuple[float, float],
     hemisphere = "north" if center[1] >= 0 else "south"
     utm_crs = pyproj.CRS(f"+proj=utm +zone={utm_zone} +{hemisphere} +datum=WGS84")
 
-    project_to_utm = pyproj.Transformer.from_crs(
-        proj_wgs84, utm_crs, always_xy=True
-    ).transform
-    project_to_wgs = pyproj.Transformer.from_crs(
-        utm_crs, proj_wgs84, always_xy=True
-    ).transform
+    # pyproj>=3.x: always_xy is the default; pyproj 2.x: need it explicitly
+    try:
+        _to_utm = pyproj.Transformer.from_crs(proj_wgs84, utm_crs, always_xy=True)
+        _to_wgs = pyproj.Transformer.from_crs(utm_crs, proj_wgs84, always_xy=True)
+    except TypeError:
+        _to_utm = pyproj.Transformer.from_crs(proj_wgs84, utm_crs)
+        _to_wgs = pyproj.Transformer.from_crs(utm_crs, proj_wgs84)
 
-    point_utm = shapely_transform(project_to_utm, point)
+    project_to_utm = _to_utm.transform
+    project_to_wgs = _to_wgs.transform
+
+    point_utm = _compat_transform(project_to_utm, point)
     buffer_utm = point_utm.buffer(radius_m)
-    buffer_wgs = shapely_transform(project_to_wgs, buffer_utm)
+    buffer_wgs = _compat_transform(project_to_wgs, buffer_utm)
 
-    from shapely.geometry import mapping
     return mapping(buffer_wgs)
 
 

@@ -22,7 +22,11 @@ class LocationService {
       if (permission == LocationPermission.denied) return false;
     }
 
-    if (permission == LocationPermission.deniedForever) return false;
+    if (permission == LocationPermission.deniedForever) {
+      throw LocationPermissionDeniedException(
+        'Location permission permanently denied. Please enable in Settings.',
+      );
+    }
 
     return true;
   }

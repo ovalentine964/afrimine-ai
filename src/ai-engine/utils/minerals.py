@@ -110,7 +110,10 @@ MINERAL_NAME_TO_ID = {m.name: m.id for m in MINERAL_CLASSES}
 
 def get_mineral_by_name(name: str) -> Optional[MineralClass]:
     """Lookup mineral by name (case-insensitive)."""
-    return MINERAL_NAME_TO_ID.get(name.lower())
+    class_id = MINERAL_NAME_TO_ID.get(name.lower())
+    if class_id is not None:
+        return MINERAL_MAP.get(class_id)
+    return None
 
 
 def get_mineral_by_id(class_id: int) -> Optional[MineralClass]:

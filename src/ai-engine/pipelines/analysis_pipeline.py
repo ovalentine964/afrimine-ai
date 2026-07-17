@@ -17,6 +17,7 @@ from agents.compliance_agent import ComplianceAgent
 from agents.report_agent import ReportAgent
 from models.classifier import create_classifier, load_classifier
 from utils.config import AfriMineConfig
+from utils.database import save_analysis_result, get_supabase_client
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +52,18 @@ class AnalysisPipeline:
                 logger.info(f"Gemini model initialized: {config.agents.gemini_model}")
             except Exception as e:
                 logger.warning(f"Gemini initialization failed: {e}")
+
+        # Initialize Supabase client if configured
+        self.db_client = None
+        if config.database.enabled:
+            self.db_client = get_supabase_client(
+                url=config.database.supabase_url,
+                key=config.database.supabase_key,
+            )
+            if self.db_client:
+                logger.info("Supabase database connected")
+            else:
+                logger.warning("Supabase configured but connection failed")
 
         # Initialize agents
         self.sampling_agent = SamplingAgent(gemini_model=self.gemini)
@@ -92,19 +105,25 @@ class AnalysisPipeline:
 
         # ── Step 1: Sampling Plan ──
         logger.info("[Step 1/6] Generating sampling plan...")
-        sampling_points = self.sampling_agent.generate_sampling_grid(
-            lat_min=area.get("lat_min", -1.0),
-            lat_max=area.get("lat_max", 0.0),
-            lon_min=area.get("lon_min", 36.0),
-            lon_max=area.get("lon_max", 37.0),
-            spacing_m=area.get("spacing_m", 500),
-        )
-        route = self.sampling_agent.optimize_route(
-            sampling_points,
-            start_lat=area.get("lat_min", -1.0),
-            start_lon=area.get("lon_min", 36.0),
-        )
-        sampling_report = self.sampling_agent.generate_report(sampling_points, route)
+        sampling_points = []
+        route = []
+        try:
+            sampling_points = self.sampling_agent.generate_sampling_grid(
+                lat_min=area.get("lat_min", -1.0),
+                lat_max=area.get("lat_max", 0.0),
+                lon_min=area.get("lon_min", 36.0),
+                lon_max=area.get("lon_max", 37.0),
+                spacing_m=area.get("spacing_m", 500),
+            )
+            route = self.sampling_agent.optimize_route(
+                sampling_points,
+                start_lat=area.get("lat_min", -1.0),
+                start_lon=area.get("lon_min", 36.0),
+            )
+            sampling_report = self.sampling_agent.generate_report(sampling_points, route)
+        except Exception as e:
+            logger.error("Sampling plan generation failed: %s", e, exc_info=True)
+            sampling_report = f"Sampling plan failed: {e}"
         results["sampling"] = {
             "points": len(sampling_points),
             "route_days": max(r.get("day", 1) for r in route) if route else 0,
@@ -113,8 +132,14 @@ class AnalysisPipeline:
 
         # ── Step 2: Mineral Analysis ──
         logger.info("[Step 2/6] Running mineral analysis...")
-        analysis_results = self.analysis_agent.analyze_batch(sample_images)
-        analysis_summary = self.analysis_agent.get_classified_summary(analysis_results)
+        analysis_results = []
+        analysis_summary = {}
+        try:
+            analysis_results = self.analysis_agent.analyze_batch(sample_images)
+            analysis_summary = self.analysis_agent.get_classified_summary(analysis_results)
+        except Exception as e:
+            logger.error("Mineral analysis failed: %s", e, exc_info=True)
+            analysis_summary = {"error": str(e)}
         results["analysis"] = {
             "samples": analysis_results,
             "summary": analysis_summary,
@@ -131,8 +156,14 @@ class AnalysisPipeline:
             "lon": (area.get("lon_min", 0) + area.get("lon_max", 0)) / 2,
             "county": area.get("county", ""),
         }
-        geological = self.geology_agent.interpret_mineral_assemblage(minerals_found, location)
-        geo_report = self.geology_agent.generate_geological_report(analysis_results, location)
+        geological = {}
+        geo_report = ""
+        try:
+            geological = self.geology_agent.interpret_mineral_assemblage(minerals_found, location)
+            geo_report = self.geology_agent.generate_geological_report(analysis_results, location)
+        except Exception as e:
+            logger.error("Geological interpretation failed: %s", e, exc_info=True)
+            geo_report = f"Geological interpretation failed: {e}"
         results["geology"] = {
             "context": geological,
             "report": geo_report,
@@ -140,17 +171,23 @@ class AnalysisPipeline:
 
         # ── Step 4: Market Analysis ──
         logger.info("[Step 4/6] Running market analysis...")
-        market_summary = self.market_agent.get_market_summary(minerals_found)
-        # Calculate viability for dominant mineral
-        if analysis_summary.get("dominant_mineral"):
-            dominant = analysis_summary["dominant_mineral"]
-            avg_grade = self._average_grade(analysis_results, dominant)
-            grade_unit = self._get_grade_unit(analysis_results, dominant)
-            viability = self.market_agent.calculate_economic_viability(
-                dominant, avg_grade, grade_unit, 1000
-            )
-            market_summary["viability"] = viability
-        market_report = self.market_agent.generate_market_report(analysis_results)
+        market_summary = {}
+        market_report = ""
+        try:
+            market_summary = self.market_agent.get_market_summary(minerals_found)
+            # Calculate viability for dominant mineral
+            if analysis_summary.get("dominant_mineral"):
+                dominant = analysis_summary["dominant_mineral"]
+                avg_grade = self._average_grade(analysis_results, dominant)
+                grade_unit = self._get_grade_unit(analysis_results, dominant)
+                viability = self.market_agent.calculate_economic_viability(
+                    dominant, avg_grade, grade_unit, 1000
+                )
+                market_summary["viability"] = viability
+            market_report = self.market_agent.generate_market_report(analysis_results)
+        except Exception as e:
+            logger.error("Market analysis failed: %s", e, exc_info=True)
+            market_report = f"Market analysis failed: {e}"
         results["market"] = {
             "summary": market_summary,
             "report": market_report,
@@ -158,39 +195,47 @@ class AnalysisPipeline:
 
         # ── Step 5: Compliance Check ──
         logger.info("[Step 5/6] Checking compliance...")
-        if miner_info:
-            compliance = self.compliance_agent.check_compliance(
-                licence_type=licence_type,
-                miner_info=miner_info,
-                operation_details={
-                    "mineral": analysis_summary.get("dominant_mineral", "unknown"),
-                    "has_licence": miner_info.get("has_licence", False),
-                    "licence_expiry": miner_info.get("licence_expiry", ""),
-                    "eia_licence": miner_info.get("eia_licence", False),
-                    "emp_submitted": miner_info.get("emp_submitted", False),
-                    "safety_plan": miner_info.get("safety_plan", False),
-                    "worker_training": miner_info.get("worker_training", False),
-                    "ppe_available": miner_info.get("ppe_available", False),
-                    "royalties_current": miner_info.get("royalties_current", False),
-                    "community_development_agreement": miner_info.get("cda", False),
-                    "designated_area": miner_info.get("designated_area", False),
-                },
-            )
-        else:
-            compliance = {"overall_status": "not_checked", "checks": []}
+        compliance = {"overall_status": "not_checked", "checks": []}
+        try:
+            if miner_info:
+                compliance = self.compliance_agent.check_compliance(
+                    licence_type=licence_type,
+                    miner_info=miner_info,
+                    operation_details={
+                        "mineral": analysis_summary.get("dominant_mineral", "unknown"),
+                        "has_licence": miner_info.get("has_licence", False),
+                        "licence_expiry": miner_info.get("licence_expiry", ""),
+                        "eia_licence": miner_info.get("eia_licence", False),
+                        "emp_submitted": miner_info.get("emp_submitted", False),
+                        "safety_plan": miner_info.get("safety_plan", False),
+                        "worker_training": miner_info.get("worker_training", False),
+                        "ppe_available": miner_info.get("ppe_available", False),
+                        "royalties_current": miner_info.get("royalties_current", False),
+                        "community_development_agreement": miner_info.get("cda", False),
+                        "designated_area": miner_info.get("designated_area", False),
+                    },
+                )
+        except Exception as e:
+            logger.error("Compliance check failed: %s", e, exc_info=True)
+            compliance = {"overall_status": "error", "error": str(e), "checks": []}
         results["compliance"] = compliance
 
         # ── Step 6: Report Generation ──
         logger.info("[Step 6/6] Generating report...")
-        report = self.report_agent.generate_comprehensive_report(
-            analysis_results=analysis_results,
-            geological_context=geological,
-            market_data=market_summary,
-            sampling_plan={"total_points": len(sampling_points), "days": results["sampling"]["route_days"]},
-            compliance_status=compliance,
-        )
+        report = {"report_text": "", "report_path": None, "enhanced_summary": None}
+        try:
+            report = self.report_agent.generate_comprehensive_report(
+                analysis_results=analysis_results,
+                geological_context=geological,
+                market_data=market_summary,
+                sampling_plan={"total_points": len(sampling_points), "days": results["sampling"]["route_days"]},
+                compliance_status=compliance,
+            )
+        except Exception as e:
+            logger.error("Report generation failed: %s", e, exc_info=True)
+            report = {"report_text": f"Report generation failed: {e}", "report_path": None, "enhanced_summary": None}
         results["report"] = {
-            "text": report["report_text"],
+            "text": report.get("report_text", ""),
             "path": report.get("report_path"),
             "enhanced_summary": report.get("enhanced_summary"),
         }
@@ -204,6 +249,21 @@ class AnalysisPipeline:
         logger.info(f"Minerals: {', '.join(minerals_found)}")
         logger.info(f"Report: {report.get('report_path', 'N/A')}")
         logger.info("=" * 60)
+
+        # Save to Supabase if configured
+        if self.db_client and results.get("status") == "completed":
+            try:
+                save_analysis_result({
+                    "area": area.get("county", "unknown"),
+                    "minerals_found": minerals_found,
+                    "n_samples": analysis_summary.get("total_samples", 0),
+                    "dominant_mineral": analysis_summary.get("dominant_mineral"),
+                    "compliance_status": compliance.get("overall_status"),
+                    "report_path": report.get("report_path"),
+                })
+                logger.info("Pipeline results saved to Supabase")
+            except Exception as e:
+                logger.warning("Failed to save to Supabase: %s", e)
 
         return results
 

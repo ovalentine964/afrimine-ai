@@ -31,10 +31,26 @@ import numpy as np
 from utils.helpers import setup_logging, print_banner, date_range, normalize_array
 from utils.config import (
     KenyaBounds, SentinelConfig, AlterationConfig,
-    StructuralConfig, PostGISConfig, OUTPUT_DIR, CACHE_DIR
+    StructuralConfig, PostGISConfig, OUTPUT_DIR, CACHE_DIR,
+    ALTERATION_COLORMAPS
 )
-from acquisition.gee_client import initialize_ee, verify_connection
-from acquisition.downloader import SentinelDownloader, download_region_data
+
+# GEE modules — graceful import (may not be installed)
+try:
+    from acquisition.gee_client import initialize_ee, verify_connection, EE_AVAILABLE
+except ImportError:
+    EE_AVAILABLE = False
+    def initialize_ee(**kwargs):
+        return False
+    def verify_connection():
+        return False
+
+try:
+    from acquisition.downloader import SentinelDownloader, download_region_data
+except (ImportError, RuntimeError):
+    SentinelDownloader = None
+    download_region_data = None
+
 from processing.band_math import BandMathEngine
 from processing.alteration import AlterationMapper
 from analysis.structural import StructuralAnalyzer
@@ -170,17 +186,28 @@ def run_pipeline(args):
         logger.info("Offline mode: using synthetic demo data")
         imagery = generate_demo_data()
     else:
-        logger.info("Initializing Google Earth Engine...")
-        if not initialize_ee(project_id=args.gee_project):
-            logger.warning("GEE init failed, falling back to demo data")
+        if not EE_AVAILABLE or SentinelDownloader is None:
+            logger.warning(
+                "GEE not available (earthengine-api not installed), "
+                "falling back to demo data"
+            )
             imagery = generate_demo_data()
         else:
-            downloader = SentinelDownloader()
-            imagery = downloader.download_composite(
-                bbox=bbox,
-                start_date=start_date,
-                end_date=end_date,
-            )
+            logger.info("Initializing Google Earth Engine...")
+            if not initialize_ee(project_id=args.gee_project):
+                logger.warning("GEE init failed, falling back to demo data")
+                imagery = generate_demo_data()
+            else:
+                try:
+                    downloader = SentinelDownloader()
+                    imagery = downloader.download_composite(
+                        bbox=bbox,
+                        start_date=start_date,
+                        end_date=end_date,
+                    )
+                except Exception as e:
+                    logger.warning(f"GEE download failed: {e}, falling back to demo data")
+                    imagery = generate_demo_data()
 
     logger.info(f"Imagery shape: {imagery['data'].shape}")
     logger.info(f"Bands: {imagery['bands']}")
