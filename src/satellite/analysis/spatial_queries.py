@@ -215,8 +215,14 @@ class SpatialQueryEngine:
             return rows
         else:
             # In-memory fallback using Shapely
+            try:
+                from shapely import transform as _shapely_v2_transform
+                _SHAPELY_V2 = True
+            except ImportError:
+                from shapely.ops import transform as _shapely_v1_transform
+                _SHAPELY_V2 = False
+
             from shapely.geometry import Point, LineString
-            from shapely.ops import transform as shapely_transform
             import pyproj
 
             points = self._in_memory_store["sample_points"]
@@ -231,16 +237,28 @@ class SpatialQueryEngine:
             hemisphere = "north" if np.mean([p["lat"] for p in points]) >= 0 else "south"
             crs_wgs = pyproj.CRS("EPSG:4326")
             crs_utm = pyproj.CRS(f"+proj=utm +zone={utm_zone} +{hemisphere} +datum=WGS84")
-            to_utm = pyproj.Transformer.from_crs(crs_wgs, crs_utm, always_xy=True).transform
+
+            # pyproj>=3.x: always_xy is the default; pyproj 2.x: need it explicitly
+            try:
+                _transformer = pyproj.Transformer.from_crs(crs_wgs, crs_utm, always_xy=True)
+            except TypeError:
+                _transformer = pyproj.Transformer.from_crs(crs_wgs, crs_utm)
+            to_utm = _transformer.transform
+
+            def _compat_transform(func, geom):
+                """Shapely 1.x / 2.x compatible transform."""
+                if _SHAPELY_V2:
+                    return _shapely_v2_transform(geom, func)
+                return _shapely_v1_transform(func, geom)
 
             line_geoms = [
-                shapely_transform(to_utm, LineString([(l["x1"], l["y1"]), (l["x2"], l["y2"])]))
+                _compat_transform(to_utm, LineString([(l["x1"], l["y1"]), (l["x2"], l["y2"])]))
                 for l in lines
             ]
 
             results = []
             for p in points:
-                pt = shapely_transform(to_utm, Point(p["lon"], p["lat"]))
+                pt = _compat_transform(to_utm, Point(p["lon"], p["lat"]))
                 min_dist = min(pt.distance(line) for line in line_geoms)
                 if min_dist <= buffer_m:
                     results.append({
@@ -288,7 +306,14 @@ class SpatialQueryEngine:
                     row = result.fetchone()
                     results[radius] = {"samples": row[0] if row else 0}
         else:
-            from shapely.geometry import Point
+            try:
+                from shapely.geometry import Point
+            except ImportError:
+                logger.warning("Shapely not available for buffer analysis")
+                for radius in radii:
+                    results[radius] = {"samples": 0}
+                return results
+
             center = Point(point[0], point[1])
             for radius in radii:
                 # Approximate degree buffer (rough)

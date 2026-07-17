@@ -335,6 +335,25 @@ class BlockModel:
     # Export / Visualization
     # ------------------------------------------------------------------
 
+    def get_block(self, i: int, j: int, k: int) -> Optional[Block]:
+        """Return a Block dataclass instance for position (i, j, k), or None if empty."""
+        if not self._initialized:
+            return None
+        if not self.is_valid(i, j, k):
+            return None
+        g = self._grades[i, j, k]
+        if np.isnan(g):
+            return None
+        return Block(
+            i=i, j=j, k=k,
+            centroid=self.centroid(i, j, k),
+            grade=float(g),
+            variance=float(self._variances[i, j, k]) if not np.isnan(self._variances[i, j, k]) else 0.0,
+            density=float(self._densities[i, j, k]),
+            domain=int(self._domains[i, j, k]),
+            classification=str(self._classifications[i, j, k]),
+        )
+
     def to_dataframe(self) -> pd.DataFrame:
         """Export block model to a flat DataFrame."""
         if not self._initialized:
@@ -344,22 +363,21 @@ class BlockModel:
         for i in range(self.nx):
             for j in range(self.ny):
                 for k in range(self.nz):
-                    c = self.centroid(i, j, k)
-                    g = self._grades[i, j, k]
-                    if np.isnan(g):
+                    block = self.get_block(i, j, k)
+                    if block is None:
                         continue  # skip empty blocks
                     records.append({
-                        "x": c[0],
-                        "y": c[1],
-                        "z": c[2],
-                        "grade": g,
-                        "variance": self._variances[i, j, k],
-                        "domain": self._domains[i, j, k],
-                        "classification": self._classifications[i, j, k],
-                        "density": self._densities[i, j, k],
-                        "block_i": i,
-                        "block_j": j,
-                        "block_k": k,
+                        "x": block.centroid[0],
+                        "y": block.centroid[1],
+                        "z": block.centroid[2],
+                        "grade": block.grade,
+                        "variance": block.variance,
+                        "domain": block.domain,
+                        "classification": block.classification,
+                        "density": block.density,
+                        "block_i": block.i,
+                        "block_j": block.j,
+                        "block_k": block.k,
                     })
 
         return pd.DataFrame(records)
@@ -385,16 +403,16 @@ class BlockModel:
             for i in range(self.nx):
                 for j in range(self.ny):
                     for k in range(self.nz):
-                        g = self._grades[i, j, k]
-                        if np.isnan(g):
+                        block = self.get_block(i, j, k)
+                        if block is None:
                             continue
                         data["blocks"].append({
-                            "i": i, "j": j, "k": k,
-                            "centroid": self.centroid(i, j, k).tolist(),
-                            "grade": float(g),
-                            "variance": float(self._variances[i, j, k]) if not np.isnan(self._variances[i, j, k]) else None,
-                            "domain": int(self._domains[i, j, k]),
-                            "classification": str(self._classifications[i, j, k]),
+                            "i": block.i, "j": block.j, "k": block.k,
+                            "centroid": block.centroid.tolist(),
+                            "grade": block.grade,
+                            "variance": block.variance if block.variance else None,
+                            "domain": block.domain,
+                            "classification": block.classification,
                         })
 
         with open(path, "w") as f:

@@ -4,6 +4,10 @@
 # ===== BUILD STAGE =====
 FROM python:3.11-slim AS builder
 
+ARG VERSION=dev
+ARG BUILD_DATE
+ARG VCS_REF
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     libgdal-dev \
@@ -18,6 +22,19 @@ RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
 
 # ===== RUNTIME STAGE =====
 FROM python:3.11-slim
+
+ARG VERSION=dev
+ARG BUILD_DATE
+ARG VCS_REF
+
+LABEL org.opencontainers.image.title="afrimine-ai-engine" \
+      org.opencontainers.image.description="AfriMine AI Python AI Engine" \
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.created="${BUILD_DATE}" \
+      org.opencontainers.image.revision="${VCS_REF}" \
+      org.opencontainers.image.source="https://github.com/ovalentine964/afrimine-ai" \
+      org.opencontainers.image.vendor="AfriMine AI" \
+      org.opencontainers.image.licenses="MIT"
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libgdal32 \
@@ -36,6 +53,9 @@ COPY --from=builder /install /usr/local
 
 # Copy application code
 COPY src/ai-engine/ .
+
+# Ensure write permissions for cache directories
+RUN mkdir -p /app/cache /app/models && chown -R afrimine:afrimine /app
 
 USER afrimine
 

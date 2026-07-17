@@ -29,19 +29,39 @@ class UserModel {
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
     return UserModel(
-      id: json['id'] as String,
-      phoneNumber: json['phone_number'] as String,
+      id: json['id'] as String? ?? '',
+      phoneNumber: json['phone_number'] as String? ?? '',
       name: json['name'] as String?,
       email: json['email'] as String?,
-      landAreaAcres: json['land_area_acres']?.toDouble(),
+      landAreaAcres: _parseDouble(json['land_area_acres']),
       landLocation: json['land_location'] as String?,
-      landLat: json['land_lat']?.toDouble(),
-      landLng: json['land_lng']?.toDouble(),
+      landLat: _parseDouble(json['land_lat']),
+      landLng: _parseDouble(json['land_lng']),
       preferredLanguage: json['preferred_language'] as String? ?? 'en',
       offlineMode: json['offline_mode'] as bool? ?? true,
-      createdAt: DateTime.parse(json['created_at'] as String),
-      updatedAt: DateTime.parse(json['updated_at'] as String),
+      createdAt: _parseDateTime(json['created_at']),
+      updatedAt: _parseDateTime(json['updated_at']),
     );
+  }
+
+  static double? _parseDouble(dynamic value) {
+    if (value == null) return null;
+    if (value is double) return value;
+    if (value is int) return value.toDouble();
+    if (value is String) return double.tryParse(value);
+    return null;
+  }
+
+  static DateTime _parseDateTime(dynamic value) {
+    if (value is DateTime) return value;
+    if (value is String) {
+      try {
+        return DateTime.parse(value);
+      } catch (_) {
+        return DateTime.now();
+      }
+    }
+    return DateTime.now();
   }
 
   Map<String, dynamic> toJson() {

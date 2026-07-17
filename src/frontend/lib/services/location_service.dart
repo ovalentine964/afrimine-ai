@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 
@@ -26,17 +27,31 @@ class LocationService {
     return true;
   }
 
+  /// Returns the current position, or null if permissions are denied or location is unavailable.
+  /// Throws [LocationPermissionDeniedException] if permission is permanently denied.
   Future<Position?> getCurrentLocation() async {
-    final hasPermission = await checkPermission();
-    if (!hasPermission) return null;
-
     try {
+      final hasPermission = await checkPermission();
+      if (!hasPermission) return null;
+
       return await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high,
         timeLimit: const Duration(seconds: 15),
       );
-    } catch (e) {
+    } on LocationPermissionDeniedException {
+      rethrow;
+    } on TimeoutException {
       // Try with lower accuracy
+      try {
+        return await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.medium,
+          timeLimit: const Duration(seconds: 10),
+        );
+      } catch (_) {
+        return null;
+      }
+    } catch (e) {
+      // Try with lower accuracy as fallback
       try {
         return await Geolocator.getCurrentPosition(
           desiredAccuracy: LocationAccuracy.medium,
@@ -82,4 +97,11 @@ class LocationService {
   ) {
     return Geolocator.distanceBetween(startLat, startLng, endLat, endLng);
   }
+}
+
+class LocationPermissionDeniedException implements Exception {
+  final String message;
+  LocationPermissionDeniedException([this.message = 'Location permission denied']);
+  @override
+  String toString() => message;
 }

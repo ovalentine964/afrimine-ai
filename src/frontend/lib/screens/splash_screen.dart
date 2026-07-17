@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../utils/constants.dart';
+import '../services/auth_service.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -38,16 +39,31 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
 
     final prefs = await SharedPreferences.getInstance();
     final hasOnboarded = prefs.getBool('has_onboarded') ?? false;
-    final isLoggedIn = prefs.getBool('is_logged_in') ?? false;
 
     if (!mounted) return;
 
     if (!hasOnboarded) {
       context.go('/onboarding');
-    } else if (!isLoggedIn) {
-      context.go('/auth');
-    } else {
+      return;
+    }
+
+    // Check Supabase session for auth state restoration
+    bool isLoggedIn = false;
+    try {
+      final authService = AuthService();
+      isLoggedIn = await authService.hasExistingSession();
+    } catch (_) {
+      isLoggedIn = false;
+    }
+
+    if (!mounted) return;
+
+    if (isLoggedIn) {
+      await prefs.setBool('is_logged_in', true);
       context.go('/dashboard');
+    } else {
+      await prefs.setBool('is_logged_in', false);
+      context.go('/auth');
     }
   }
 

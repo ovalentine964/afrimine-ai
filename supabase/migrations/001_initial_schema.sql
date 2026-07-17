@@ -241,12 +241,27 @@ CREATE POLICY "Users can view own profile"
     ON users FOR SELECT
     USING (auth.uid() = auth_id);
 
+CREATE POLICY "Users can insert own profile"
+    ON users FOR INSERT
+    WITH CHECK (auth.uid() = auth_id);
+
 CREATE POLICY "Users can update own profile"
     ON users FOR UPDATE
+    USING (auth.uid() = auth_id)
+    WITH CHECK (auth.uid() = auth_id);
+
+CREATE POLICY "Users can delete own profile"
+    ON users FOR DELETE
     USING (auth.uid() = auth_id);
 
 CREATE POLICY "Admins can view all users"
     ON users FOR SELECT
+    USING (
+        EXISTS (SELECT 1 FROM users WHERE auth_id = auth.uid() AND role = 'admin')
+    );
+
+CREATE POLICY "Admins can manage all users"
+    ON users FOR ALL
     USING (
         EXISTS (SELECT 1 FROM users WHERE auth_id = auth.uid() AND role = 'admin')
     );
@@ -262,7 +277,18 @@ CREATE POLICY "Users can insert own mine sites"
 
 CREATE POLICY "Users can update own mine sites"
     ON mine_sites FOR UPDATE
+    USING (owner_id IN (SELECT id FROM users WHERE auth_id = auth.uid()))
+    WITH CHECK (owner_id IN (SELECT id FROM users WHERE auth_id = auth.uid()));
+
+CREATE POLICY "Users can delete own mine sites"
+    ON mine_sites FOR DELETE
     USING (owner_id IN (SELECT id FROM users WHERE auth_id = auth.uid()));
+
+CREATE POLICY "Admins can manage all mine sites"
+    ON mine_sites FOR ALL
+    USING (
+        EXISTS (SELECT 1 FROM users WHERE auth_id = auth.uid() AND role = 'admin')
+    );
 
 -- ── Samples: owner or admin ──────────────────────────────
 CREATE POLICY "Users can view own samples"
@@ -275,7 +301,18 @@ CREATE POLICY "Users can insert own samples"
 
 CREATE POLICY "Users can update own samples"
     ON samples FOR UPDATE
+    USING (user_id IN (SELECT id FROM users WHERE auth_id = auth.uid()))
+    WITH CHECK (user_id IN (SELECT id FROM users WHERE auth_id = auth.uid()));
+
+CREATE POLICY "Users can delete own samples"
+    ON samples FOR DELETE
     USING (user_id IN (SELECT id FROM users WHERE auth_id = auth.uid()));
+
+CREATE POLICY "Admins can manage all samples"
+    ON samples FOR ALL
+    USING (
+        EXISTS (SELECT 1 FROM users WHERE auth_id = auth.uid() AND role = 'admin')
+    );
 
 -- Geologists can view all samples in their county
 CREATE POLICY "Geologists can view county samples"
@@ -304,6 +341,21 @@ CREATE POLICY "Service role can insert analyses"
     ON analyses FOR INSERT
     WITH CHECK (TRUE);  -- backend service uses service_role key
 
+CREATE POLICY "Service role can update analyses"
+    ON analyses FOR UPDATE
+    USING (TRUE)
+    WITH CHECK (TRUE);  -- backend service uses service_role key
+
+CREATE POLICY "Users can view analyses for own samples via user_id"
+    ON analyses FOR SELECT
+    USING (user_id IN (SELECT id FROM users WHERE auth_id = auth.uid()));
+
+CREATE POLICY "Admins can manage all analyses"
+    ON analyses FOR ALL
+    USING (
+        EXISTS (SELECT 1 FROM users WHERE auth_id = auth.uid() AND role = 'admin')
+    );
+
 -- ── Reports: owner ───────────────────────────────────────
 CREATE POLICY "Users can view own reports"
     ON reports FOR SELECT
@@ -312,6 +364,21 @@ CREATE POLICY "Users can view own reports"
 CREATE POLICY "Users can insert own reports"
     ON reports FOR INSERT
     WITH CHECK (user_id IN (SELECT id FROM users WHERE auth_id = auth.uid()));
+
+CREATE POLICY "Users can update own reports"
+    ON reports FOR UPDATE
+    USING (user_id IN (SELECT id FROM users WHERE auth_id = auth.uid()))
+    WITH CHECK (user_id IN (SELECT id FROM users WHERE auth_id = auth.uid()));
+
+CREATE POLICY "Users can delete own reports"
+    ON reports FOR DELETE
+    USING (user_id IN (SELECT id FROM users WHERE auth_id = auth.uid()));
+
+CREATE POLICY "Admins can manage all reports"
+    ON reports FOR ALL
+    USING (
+        EXISTS (SELECT 1 FROM users WHERE auth_id = auth.uid() AND role = 'admin')
+    );
 
 -- ── Market Prices: public read ───────────────────────────
 CREATE POLICY "Anyone can view market prices"
@@ -322,9 +389,31 @@ CREATE POLICY "Service role can insert prices"
     ON market_prices FOR INSERT
     WITH CHECK (TRUE);
 
+CREATE POLICY "Service role can update prices"
+    ON market_prices FOR UPDATE
+    USING (TRUE)
+    WITH CHECK (TRUE);
+
+CREATE POLICY "Service role can delete old prices"
+    ON market_prices FOR DELETE
+    USING (TRUE);
+
 -- ── Sync Queue: own entries only ─────────────────────────
-CREATE POLICY "Users can manage own sync queue"
-    ON sync_queue FOR ALL
+CREATE POLICY "Users can view own sync queue"
+    ON sync_queue FOR SELECT
+    USING (user_id IN (SELECT id FROM users WHERE auth_id = auth.uid()));
+
+CREATE POLICY "Users can insert own sync queue"
+    ON sync_queue FOR INSERT
+    WITH CHECK (user_id IN (SELECT id FROM users WHERE auth_id = auth.uid()));
+
+CREATE POLICY "Users can update own sync queue"
+    ON sync_queue FOR UPDATE
+    USING (user_id IN (SELECT id FROM users WHERE auth_id = auth.uid()))
+    WITH CHECK (user_id IN (SELECT id FROM users WHERE auth_id = auth.uid()));
+
+CREATE POLICY "Users can delete own sync queue"
+    ON sync_queue FOR DELETE
     USING (user_id IN (SELECT id FROM users WHERE auth_id = auth.uid()));
 
 -- ═══════════════════════════════════════════════════════════
@@ -357,16 +446,16 @@ CREATE TRIGGER trg_reports_updated_at
     FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
 -- Generate sample codes: AM-YYYY-NNNN
+-- Uses a sequence to prevent race conditions on concurrent inserts
+CREATE SEQUENCE IF NOT EXISTS sample_code_seq START 1;
+
 CREATE OR REPLACE FUNCTION generate_sample_code()
 RETURNS TRIGGER AS $$
 DECLARE
     next_num INTEGER;
 BEGIN
-    SELECT COALESCE(MAX(CAST(SPLIT_PART(sample_code, '-', 3) AS INTEGER)), 0) + 1
-    INTO next_num
-    FROM samples
-    WHERE sample_code LIKE 'AM-' || EXTRACT(YEAR FROM NOW()) || '-%';
-
+    -- Use sequence to guarantee uniqueness under concurrent inserts
+    SELECT nextval('sample_code_seq') INTO next_num;
     NEW.sample_code := 'AM-' || EXTRACT(YEAR FROM NOW()) || '-' || LPAD(next_num::TEXT, 4, '0');
     RETURN NEW;
 END;

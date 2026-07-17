@@ -11,6 +11,7 @@ services:
     plan: free
     branch: main
     healthCheckPath: /health
+    autoDeploy: true
     envVars:
       - key: APP_ENV
         value: production
@@ -36,6 +37,12 @@ services:
         fromService:
           name: afrimine-redis
           property: connectionString
+    # Health check configuration
+    # Render will mark service unhealthy if:
+    # - Health endpoint returns non-2xx
+    # - Response time exceeds 30s (Render default)
+    # - Service fails 3 consecutive checks
+    # Automatic restart on unhealthy detection
 
   # ── Python AI Engine ───────────────────────────────────
   - type: web
@@ -46,6 +53,7 @@ services:
     plan: free
     branch: main
     healthCheckPath: /health
+    autoDeploy: true
     envVars:
       - key: APP_ENV
         value: production
@@ -63,6 +71,9 @@ services:
         sync: false
       - key: SENTRY_DSN
         sync: false
+    # Health check: AI engine may take longer to start
+    # due to model loading. Docker HEALTHCHECK has
+    # start-period=30s to accommodate this.
 
   # ── Redis ──────────────────────────────────────────────
   - type: redis

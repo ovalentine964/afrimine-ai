@@ -188,18 +188,23 @@ class GradeEstimator:
         X = self.prepare_features(visual_features, xrf_data, image_embedding)
         X_scaled = self.scaler.transform(X)
 
-        # Prediction with uncertainty estimation using individual tree predictions
-        y_pred = self.model.predict(X_scaled)[0]
+        # Prediction with uncertainty estimation
+        y_pred = float(self.model.predict(X_scaled)[0])
 
-        # Bootstrap confidence interval approximation
-        preds_all_trees = []
-        for estimator in self.model.get_booster():
-            dmat = xgb.DMatrix(X_scaled, feature_names=self.feature_names)
-            preds_all_trees.append(estimator.predict(dmat)[0] if hasattr(estimator, 'predict') else y_pred)
-
-        # Use model's built-in prediction
-        y_pred = float(y_pred)
-        std_estimate = abs(y_pred) * 0.15  # Conservative 15% uncertainty
+        # Estimate uncertainty from per-tree predictions via iteration_range
+        booster = self.model.get_booster()
+        dmat = xgb.DMatrix(X_scaled, feature_names=self.feature_names)
+        n_trees = self.model.n_estimators
+        try:
+            # Get predictions at different iteration stages for variance estimate
+            tree_preds = []
+            for i in range(max(1, n_trees // 5), n_trees + 1, max(1, n_trees // 5)):
+                pred_i = booster.predict(dmat, iteration_range=(0, i))
+                tree_preds.append(float(pred_i[0]))
+            std_estimate = float(np.std(tree_preds)) if len(tree_preds) > 1 else abs(y_pred) * 0.15
+        except Exception:
+            # Fallback: conservative 15% uncertainty estimate
+            std_estimate = abs(y_pred) * 0.15
 
         return {
             "grade": round(max(0, y_pred), 4),

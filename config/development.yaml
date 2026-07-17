@@ -15,7 +15,7 @@ server:
 
 database:
   # Local PostgreSQL via docker-compose
-  url: postgresql://afrimine:afrimine_dev_pass@localhost:5432/afrimine
+  url: ${DATABASE_URL}
   max_open_conns: 10
   max_idle_conns: 5
   conn_max_lifetime: 5m

@@ -5,11 +5,12 @@ import '../services/auth_service.dart';
 class AuthProvider extends ChangeNotifier {
   final AuthService _authService = AuthService();
   bool _isLoading = false;
+  bool _isRestoringSession = true; // Start in restoring state
   String? _error;
   User? _user;
 
   AuthProvider() {
-    _user = _authService.currentUser;
+    _restoreSession();
     _authService.authStateChanges.listen((state) {
       _user = state.session?.user;
       notifyListeners();
@@ -17,11 +18,27 @@ class AuthProvider extends ChangeNotifier {
   }
 
   bool get isLoading => _isLoading;
+  bool get isRestoringSession => _isRestoringSession;
   String? get error => _error;
   User? get user => _user;
   bool get isLoggedIn => _user != null;
   String? get userId => _user?.id;
   String? get phoneNumber => _user?.phone;
+
+  /// Restore auth session on app restart
+  Future<void> _restoreSession() async {
+    try {
+      final hasSession = await _authService.hasExistingSession();
+      if (hasSession) {
+        _user = _authService.currentUser;
+      }
+    } catch (_) {
+      // Session restore failed, user stays logged out
+    } finally {
+      _isRestoringSession = false;
+      notifyListeners();
+    }
+  }
 
   void setLoading(bool value) {
     _isLoading = value;

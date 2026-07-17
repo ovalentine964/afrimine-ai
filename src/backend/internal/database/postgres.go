@@ -59,6 +59,11 @@ func (db *DB) Close() {
 	db.pool.Close()
 }
 
+// Ping checks database connectivity
+func (db *DB) Ping(ctx context.Context) error {
+	return db.pool.Ping(ctx)
+}
+
 // RunMigrations creates the database schema
 func (db *DB) RunMigrations(ctx context.Context) error {
 	schema := `

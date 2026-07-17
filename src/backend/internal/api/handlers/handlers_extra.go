@@ -1,11 +1,14 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/ovalentine964/afrimine-ai/backend/internal/api/middleware"
@@ -56,22 +59,22 @@ func (h *Handler) GenerateReport(w http.ResponseWriter, r *http.Request) {
 	}
 
 	go func() {
-		rctx := r.Context()
+		ctx := context.Background()
 		gen := report.NewGenerator(h.gemini, "./reports")
 
-		pdfPath, err := gen.GenerateReport(rctx, user, samples, allAnalyses)
+		pdfPath, err := gen.GenerateReport(ctx, user, samples, allAnalyses)
 		if err != nil {
 			h.logger.Error("failed to generate report PDF", "error", err)
 			created.Status = "failed"
 			created.Summary = "Report generation failed: " + err.Error()
-			h.db.UpdateReport(rctx, created)
+			h.db.UpdateReport(ctx, created)
 			return
 		}
 
 		created.PDFPath = pdfPath
 		created.Status = "ready"
 		created.Summary = fmt.Sprintf("Report generated with %d samples and %d analyses", len(samples), len(allAnalyses))
-		h.db.UpdateReport(rctx, created)
+		h.db.UpdateReport(ctx, created)
 	}()
 
 	sendJSON(w, http.StatusAccepted, models.APIResponse{
@@ -121,14 +124,27 @@ func (h *Handler) DownloadReportPDF(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if _, err := os.Stat(rep.PDFPath); os.IsNotExist(err) {
+	// Path traversal protection: resolve to absolute and verify it's within the reports directory
+	absPath, err := filepath.Abs(rep.PDFPath)
+	if err != nil {
+		sendError(w, http.StatusBadRequest, "invalid file path")
+		return
+	}
+	absReportsDir, _ := filepath.Abs("./reports")
+	if !strings.HasPrefix(absPath, absReportsDir+string(os.PathSeparator)) && absPath != absReportsDir {
+		h.logger.Warn("path traversal attempt blocked", "path", rep.PDFPath, "user_id", userID)
+		sendError(w, http.StatusForbidden, "access denied")
+		return
+	}
+
+	if _, err := os.Stat(absPath); os.IsNotExist(err) {
 		sendError(w, http.StatusNotFound, "PDF file not found")
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/pdf")
 	w.Header().Set("Content-Disposition", "attachment; filename="+rep.Title+".pdf")
-	http.ServeFile(w, r, rep.PDFPath)
+	http.ServeFile(w, r, absPath)
 }
 
 // GetMarketPrices handles GET /v1/market/prices
@@ -263,7 +279,7 @@ func (h *Handler) SyncChanges(w http.ResponseWriter, r *http.Request) {
 // HealthCheck handles GET /v1/health
 func (h *Handler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 	dbStatus := "ok"
-	if err := h.db.RunMigrations(r.Context()); err != nil {
+	if err := h.db.Ping(r.Context()); err != nil {
 		dbStatus = "degraded"
 	}
 

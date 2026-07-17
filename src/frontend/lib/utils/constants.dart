@@ -5,12 +5,21 @@ class AppConstants {
   static const String appVersion = '1.0.0';
   static const String appDescription = 'Mineral Detection Platform for Kenyan Mining Families';
 
-  // Supabase - Replace with your actual keys
-  static const String supabaseUrl = 'https://your-project.supabase.co';
-  static const String supabaseAnonKey = 'your-anon-key';
+  // Supabase - configured via --dart-define at build time
+  static const String supabaseUrl = String.fromEnvironment(
+    'SUPABASE_URL',
+    defaultValue: 'https://your-project.supabase.co',
+  );
+  static const String supabaseAnonKey = String.fromEnvironment(
+    'SUPABASE_ANON_KEY',
+    defaultValue: 'your-anon-key',
+  );
 
   // API Endpoints
-  static const String apiBaseUrl = 'https://api.afrimine.ai/v1';
+  static const String apiBaseUrl = String.fromEnvironment(
+    'API_BASE_URL',
+    defaultValue: 'https://api.afrimine.ai/v1',
+  );
   static const String aiEndpoint = '$apiBaseUrl/classify';
   static const String marketEndpoint = '$apiBaseUrl/market-prices';
   static const String reportsEndpoint = '$apiBaseUrl/reports';

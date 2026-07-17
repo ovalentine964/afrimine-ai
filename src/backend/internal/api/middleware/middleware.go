@@ -37,7 +37,7 @@ func JWTAuth(jwtService *auth.JWTService) func(http.Handler) http.Handler {
 				return
 			}
 
-			claims, err := jwtService.ValidateToken(parts[1])
+			claims, err := jwtService.ValidateAccessToken(parts[1])
 			if err != nil {
 				http.Error(w, fmt.Sprintf(`{"success":false,"error":"%s"}`, err.Error()), http.StatusUnauthorized)
 				return

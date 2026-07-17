@@ -77,10 +77,16 @@ class SyncService {
         } catch (e) {
           failed++;
           errors.add('${item.entityType}/${item.entityId}: $e');
+          final newRetryCount = item.retryCount + 1;
           await _db.updateSyncItem(item.copyWith(
-            retryCount: item.retryCount + 1,
+            retryCount: newRetryCount,
             lastError: e.toString(),
           ));
+          // Exponential backoff: wait before retrying next item
+          if (newRetryCount < AppConstants.maxRetryAttempts) {
+            final backoffMs = _calculateBackoff(newRetryCount);
+            await Future.delayed(Duration(milliseconds: backoffMs));
+          }
         }
       }
 
@@ -115,6 +121,15 @@ class SyncService {
     } finally {
       _isSyncing = false;
     }
+  }
+
+  /// Calculate exponential backoff delay in milliseconds
+  /// Base delay: 1 second, doubles with each retry attempt
+  int _calculateBackoff(int retryCount) {
+    const baseDelayMs = 1000;
+    const maxDelayMs = 30000; // 30 seconds max
+    final delay = baseDelayMs * (1 << (retryCount - 1)); // 2^(retryCount-1)
+    return delay.clamp(baseDelayMs, maxDelayMs);
   }
 
   Future<void> _processSyncItem(SyncItemModel item) async {

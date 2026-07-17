@@ -172,13 +172,13 @@ class VariogramAnalysis:
                         break
 
         if lag_tolerance is None:
-            lag_tolerance = (bin_edges[1] - bin_edges[0]) / 2
+            lag_tolerance = float(bin_edges[1] - bin_edges[0]) / 2
 
         self._empirical = EmpiricalVariogram(
-            lag_distances=bin_center,
-            semivariance=vario,
-            lag_tolerance=lag_tolerance,
-            n_pairs=n_pairs,
+            lag_distances=np.asarray(bin_center, dtype=np.float64),
+            semivariance=np.asarray(vario, dtype=np.float64),
+            lag_tolerance=float(lag_tolerance),
+            n_pairs=np.asarray(n_pairs, dtype=np.float64),
             direction=direction,
         )
         return self._empirical
@@ -187,11 +187,16 @@ class VariogramAnalysis:
     # Theoretical model fitting
     # ------------------------------------------------------------------
 
-    _MODEL_MAP = {
-        VariogramModel.SPHERICAL: gs.Spherical,
-        VariogramModel.EXPONENTIAL: gs.Exponential,
-        VariogramModel.GAUSSIAN: gs.Gaussian,
-    }
+    @classmethod
+    def _get_model_map(cls) -> dict:
+        """Return model map, building it lazily so gs can be None at import time."""
+        if gs is None:
+            raise ImportError("gstools is required: pip install gstools")
+        return {
+            VariogramModel.SPHERICAL: gs.Spherical,
+            VariogramModel.EXPONENTIAL: gs.Exponential,
+            VariogramModel.GAUSSIAN: gs.Gaussian,
+        }
 
     def fit_model(
         self,
@@ -229,7 +234,7 @@ class VariogramAnalysis:
 
         # Fit using gstools
         dim = self.ndim
-        gs_model_cls = self._MODEL_MAP[model_type]
+        gs_model_cls = self._get_model_map()[model_type]
         model = gs_model_cls(
             dim=dim,
             var=sill - nugget,
@@ -255,8 +260,8 @@ class VariogramAnalysis:
             method="Nelder-Mead",
             options={"maxiter": 10000, "xatol": 1e-8, "fatol": 1e-10},
         )
-        opt_nugget, opt_sill, opt_range = result.x
-        opt_nugget = max(opt_nugget, 0)
+        opt_nugget, opt_sill, opt_range = float(result.x[0]), float(result.x[1]), float(result.x[2])
+        opt_nugget = max(opt_nugget, 0.0)
         opt_sill = max(opt_sill, opt_nugget + 1e-6)
         opt_range = max(opt_range, 1e-6)
 
@@ -408,7 +413,7 @@ class VariogramAnalysis:
         if self._fitted is None:
             raise RuntimeError("No model fitted. Call fit_model() or cross_validate() first.")
 
-        gs_cls = self._MODEL_MAP[self._fitted.model]
+        gs_cls = self._get_model_map()[self._fitted.model]
         model = gs_cls(
             dim=self.ndim,
             var=self._fitted.sill - self._fitted.nugget,

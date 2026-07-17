@@ -4,12 +4,20 @@ Sentinel-2 imagery downloader from Google Earth Engine.
 Downloads, clips, and caches satellite imagery for specified Kenyan mining regions.
 """
 import logging
+import time
 from pathlib import Path
 from typing import Tuple, List, Optional, Dict
 from datetime import datetime
 
-import ee
 import numpy as np
+
+# Lazy ee import — module works in offline mode without it
+try:
+    import ee
+    EE_AVAILABLE = True
+except ImportError:
+    ee = None  # type: ignore
+    EE_AVAILABLE = False
 
 from ..utils.config import (
     SentinelConfig, CACHE_DIR, OUTPUT_DIR, KenyaBounds
@@ -19,6 +27,10 @@ from ..utils.helpers import (
 )
 
 logger = logging.getLogger("afrimine.satellite.downloader")
+
+# Retry configuration for network requests
+MAX_RETRIES = 3
+RETRY_DELAY_BASE = 2  # seconds, exponential backoff
 
 
 class SentinelDownloader:
@@ -33,6 +45,11 @@ class SentinelDownloader:
     """
 
     def __init__(self, config: SentinelConfig = None):
+        if not EE_AVAILABLE:
+            raise RuntimeError(
+                "earthengine-api not installed. Cannot create SentinelDownloader. "
+                "Use offline mode or install: pip install earthengine-api"
+            )
         self.config = config or SentinelConfig()
         self.collection = self.config.COLLECTION
         self.cache_dir = CACHE_DIR
@@ -157,6 +174,7 @@ class SentinelDownloader:
                         scale: int, bands: List[str]) -> Dict:
         """
         Download ee.Image as NumPy array via getInfo/getDownloadURL.
+        Includes retry logic for transient network failures.
         """
         logger.info(f"Downloading {len(bands)} bands at {scale}m resolution...")
 
@@ -173,8 +191,23 @@ class SentinelDownloader:
             import rasterio
             from io import BytesIO
 
-            response = requests.get(url, timeout=300)
-            response.raise_for_status()
+            # Retry with exponential backoff
+            response = None
+            for attempt in range(MAX_RETRIES):
+                try:
+                    response = requests.get(url, timeout=300)
+                    response.raise_for_status()
+                    break
+                except requests.exceptions.RequestException as e:
+                    if attempt < MAX_RETRIES - 1:
+                        delay = RETRY_DELAY_BASE ** (attempt + 1)
+                        logger.warning(
+                            f"Download attempt {attempt + 1} failed: {e}. "
+                            f"Retrying in {delay}s..."
+                        )
+                        time.sleep(delay)
+                    else:
+                        raise
 
             with rasterio.open(BytesIO(response.content)) as src:
                 data = src.read()
@@ -204,13 +237,29 @@ class SentinelDownloader:
                            scale: int, bands: List[str]) -> Dict:
         """
         Fallback: download pixel values via getInfo (for smaller regions).
+        Includes retry logic for network failures.
         """
         sample = image.sampleRectangle(region=region, defaultValue=0)
 
         result = {}
         for band in bands:
-            band_data = sample.get(band).getInfo()
-            result[band] = np.array(band_data, dtype=np.float32)
+            for attempt in range(MAX_RETRIES):
+                try:
+                    band_data = sample.get(band).getInfo()
+                    result[band] = np.array(band_data, dtype=np.float32)
+                    break
+                except Exception as e:
+                    if attempt < MAX_RETRIES - 1:
+                        delay = RETRY_DELAY_BASE ** (attempt + 1)
+                        logger.warning(
+                            f"getInfo() attempt {attempt + 1} for band {band} failed: {e}. "
+                            f"Retrying in {delay}s..."
+                        )
+                        time.sleep(delay)
+                    else:
+                        raise RuntimeError(
+                            f"Failed to download band {band} after {MAX_RETRIES} attempts: {e}"
+                        ) from e
 
         # Stack bands
         stacked = np.stack([result[b] for b in bands], axis=0)
@@ -288,7 +337,7 @@ class SentinelDownloader:
         max_cloud = max_cloud or self.config.MAX_CLOUD_COVER
         collection = self.get_collection(bbox, start_date, end_date, max_cloud)
 
-        # Get metadata
+        # Get metadata with retry
         def extract_metadata(image):
             props = image.toDictionary()
             return ee.Feature(None, {
@@ -298,7 +347,18 @@ class SentinelDownloader:
                 "solar_zenith": props.get("MEAN_SOLAR_ZENITH_ANGLE"),
             })
 
-        features = collection.map(extract_metadata).getInfo()["features"]
+        for attempt in range(MAX_RETRIES):
+            try:
+                features = collection.map(extract_metadata).getInfo()["features"]
+                break
+            except Exception as e:
+                if attempt < MAX_RETRIES - 1:
+                    delay = RETRY_DELAY_BASE ** (attempt + 1)
+                    logger.warning(f"list_available_images attempt {attempt + 1} failed: {e}. Retrying in {delay}s...")
+                    time.sleep(delay)
+                else:
+                    raise
+
         images = [
             {
                 "id": f["properties"]["id"],
@@ -327,7 +387,17 @@ def download_region_data(region_name: str,
 
     Returns:
         Downloaded data dict
+
+    Raises:
+        RuntimeError: If earthengine-api is not installed
+        ValueError: If region_name is unknown
     """
+    if not EE_AVAILABLE:
+        raise RuntimeError(
+            "earthengine-api not installed. Cannot download region data. "
+            "Use offline mode or install: pip install earthengine-api"
+        )
+
     regions = {
         "turkana": KenyaBounds.TURKANA,
         "kwale": KenyaBounds.KWALE,

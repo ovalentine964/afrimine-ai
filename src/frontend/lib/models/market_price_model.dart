@@ -19,14 +19,34 @@ class MarketPriceModel {
 
   factory MarketPriceModel.fromJson(Map<String, dynamic> json) {
     return MarketPriceModel(
-      mineral: json['mineral'] as String,
-      pricePerOz: (json['price_per_oz'] as num).toDouble(),
-      changePercent: (json['change_percent'] as num).toDouble(),
-      changeAbsolute: (json['change_absolute'] as num).toDouble(),
+      mineral: json['mineral'] as String? ?? 'Unknown',
+      pricePerOz: _parseDouble(json['price_per_oz']) ?? 0.0,
+      changePercent: _parseDouble(json['change_percent']) ?? 0.0,
+      changeAbsolute: _parseDouble(json['change_absolute']) ?? 0.0,
       currency: json['currency'] as String? ?? 'USD',
-      lastUpdated: DateTime.parse(json['last_updated'] as String),
+      lastUpdated: _parseDateTime(json['last_updated']),
       source: json['source'] as String?,
     );
+  }
+
+  static double? _parseDouble(dynamic value) {
+    if (value == null) return null;
+    if (value is double) return value;
+    if (value is int) return value.toDouble();
+    if (value is String) return double.tryParse(value);
+    return null;
+  }
+
+  static DateTime _parseDateTime(dynamic value) {
+    if (value is DateTime) return value;
+    if (value is String) {
+      try {
+        return DateTime.parse(value);
+      } catch (_) {
+        return DateTime.now();
+      }
+    }
+    return DateTime.now();
   }
 
   Map<String, dynamic> toJson() {

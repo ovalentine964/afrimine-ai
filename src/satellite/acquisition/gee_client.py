@@ -2,9 +2,20 @@
 Google Earth Engine client initialization and authentication.
 """
 import logging
-import ee
 
 logger = logging.getLogger("afrimine.satellite.gee")
+
+# Graceful import: earthengine-api may not be installed
+try:
+    import ee
+    EE_AVAILABLE = True
+except ImportError:
+    ee = None  # type: ignore
+    EE_AVAILABLE = False
+    logger.warning(
+        "earthengine-api not installed. GEE features unavailable. "
+        "Install with: pip install earthengine-api"
+    )
 
 
 def initialize_ee(project_id: str = None, service_account: str = None,
@@ -16,6 +27,10 @@ def initialize_ee(project_id: str = None, service_account: str = None,
     - Interactive auth (default, for local dev)
     - Service account auth (for production)
     """
+    if not EE_AVAILABLE:
+        logger.error("earthengine-api not installed. Cannot initialize GEE.")
+        return False
+
     try:
         if service_account and credentials_path:
             credentials = ee.ServiceAccountCredentials(
@@ -45,6 +60,9 @@ def initialize_ee(project_id: str = None, service_account: str = None,
 
 def verify_connection() -> bool:
     """Verify GEE connection by making a simple request."""
+    if not EE_AVAILABLE:
+        logger.error("earthengine-api not installed.")
+        return False
     try:
         info = ee.Number(42).getInfo()
         logger.info(f"GEE connection verified (test value: {info})")

@@ -12,8 +12,9 @@ import (
 
 // JWTClaims represents the JWT claims
 type JWTClaims struct {
-	UserID string `json:"user_id"`
-	Phone  string `json:"phone"`
+	UserID    string `json:"user_id"`
+	Phone     string `json:"phone"`
+	TokenType string `json:"token_type"` // "access" or "refresh"
 	jwt.RegisteredClaims
 }
 
@@ -38,8 +39,9 @@ func NewJWTService(config JWTConfig) *JWTService {
 // GenerateAccessToken creates a new access token
 func (s *JWTService) GenerateAccessToken(userID, phone string) (string, error) {
 	claims := JWTClaims{
-		UserID: userID,
-		Phone:  phone,
+		UserID:    userID,
+		Phone:     phone,
+		TokenType: "access",
 		RegisteredClaims: jwt.RegisteredClaims{
 			Issuer:    s.config.Issuer,
 			Subject:   userID,
@@ -56,8 +58,9 @@ func (s *JWTService) GenerateAccessToken(userID, phone string) (string, error) {
 // GenerateRefreshToken creates a new refresh token
 func (s *JWTService) GenerateRefreshToken(userID, phone string) (string, error) {
 	claims := JWTClaims{
-		UserID: userID,
-		Phone:  phone,
+		UserID:    userID,
+		Phone:     phone,
+		TokenType: "refresh",
 		RegisteredClaims: jwt.RegisteredClaims{
 			Issuer:    s.config.Issuer,
 			Subject:   userID,
@@ -73,6 +76,20 @@ func (s *JWTService) GenerateRefreshToken(userID, phone string) (string, error) 
 
 // ValidateToken validates a JWT token and returns the claims
 func (s *JWTService) ValidateToken(tokenString string) (*JWTClaims, error) {
+	return s.validateToken(tokenString, "")
+}
+
+// ValidateAccessToken validates a JWT token and ensures it's an access token
+func (s *JWTService) ValidateAccessToken(tokenString string) (*JWTClaims, error) {
+	return s.validateToken(tokenString, "access")
+}
+
+// ValidateRefreshToken validates a JWT token and ensures it's a refresh token
+func (s *JWTService) ValidateRefreshToken(tokenString string) (*JWTClaims, error) {
+	return s.validateToken(tokenString, "refresh")
+}
+
+func (s *JWTService) validateToken(tokenString, expectedType string) (*JWTClaims, error) {
 	token, err := jwt.ParseWithClaims(tokenString, &JWTClaims{}, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
@@ -87,6 +104,10 @@ func (s *JWTService) ValidateToken(tokenString string) (*JWTClaims, error) {
 	claims, ok := token.Claims.(*JWTClaims)
 	if !ok || !token.Valid {
 		return nil, fmt.Errorf("invalid token claims")
+	}
+
+	if expectedType != "" && claims.TokenType != expectedType {
+		return nil, fmt.Errorf("invalid token type: expected %s, got %s", expectedType, claims.TokenType)
 	}
 
 	return claims, nil

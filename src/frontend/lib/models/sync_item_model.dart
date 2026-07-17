@@ -21,14 +21,14 @@ class SyncItemModel {
 
   factory SyncItemModel.fromJson(Map<String, dynamic> json) {
     return SyncItemModel(
-      id: json['id'] as String,
-      entityType: json['entity_type'] as String,
-      entityId: json['entity_id'] as String,
-      action: json['action'] as String,
-      data: json['data'] as Map<String, dynamic>?,
-      retryCount: json['retry_count'] as int? ?? 0,
+      id: json['id'] as String? ?? '',
+      entityType: json['entity_type'] as String? ?? '',
+      entityId: json['entity_id'] as String? ?? '',
+      action: json['action'] as String? ?? '',
+      data: _parseMap(json['data']),
+      retryCount: _parseInt(json['retry_count']) ?? 0,
       lastError: json['last_error'] as String?,
-      createdAt: DateTime.parse(json['created_at'] as String),
+      createdAt: _parseDateTime(json['created_at']),
     );
   }
 
@@ -60,14 +60,38 @@ class SyncItemModel {
 
   factory SyncItemModel.fromDbMap(Map<String, dynamic> map) {
     return SyncItemModel(
-      id: map['id'] as String,
-      entityType: map['entity_type'] as String,
-      entityId: map['entity_id'] as String,
-      action: map['action'] as String,
-      retryCount: map['retry_count'] as int? ?? 0,
+      id: map['id'] as String? ?? '',
+      entityType: map['entity_type'] as String? ?? '',
+      entityId: map['entity_id'] as String? ?? '',
+      action: map['action'] as String? ?? '',
+      retryCount: _parseInt(map['retry_count']) ?? 0,
       lastError: map['last_error'] as String?,
-      createdAt: DateTime.parse(map['created_at'] as String),
+      createdAt: _parseDateTime(map['created_at']),
     );
+  }
+
+  static int? _parseInt(dynamic value) {
+    if (value == null) return null;
+    if (value is int) return value;
+    if (value is String) return int.tryParse(value);
+    return null;
+  }
+
+  static DateTime _parseDateTime(dynamic value) {
+    if (value is DateTime) return value;
+    if (value is String) {
+      try {
+        return DateTime.parse(value);
+      } catch (_) {
+        return DateTime.now();
+      }
+    }
+    return DateTime.now();
+  }
+
+  static Map<String, dynamic>? _parseMap(dynamic value) {
+    if (value is Map<String, dynamic>) return value;
+    return null;
   }
 
   SyncItemModel copyWith({
