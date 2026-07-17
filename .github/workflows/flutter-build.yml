@@ -20,36 +20,34 @@ jobs:
         with:
           flutter-version: '3.24.0'
 
-      - name: Setup Android project
+      - name: Build
         working-directory: src/frontend
         run: |
-          # Save our custom main.dart
-          cp lib/main.dart /tmp/main.dart
+          # Save our code
+          mkdir -p /tmp/afrimine_save
+          cp -r lib /tmp/afrimine_save/
+          cp pubspec.yaml /tmp/afrimine_save/
           
-          # Create temp project to get proper Android structure
+          # Create fresh Flutter project in temp dir
           cd /tmp
-          flutter create --org com.afrimine --project-name afrimine_temp --platforms android afrimine_temp
+          flutter create --org com.afrimine --project-name afrimine_build --platforms android afrimine_build
           
-          # Copy android directory to our project
-          cp -r /tmp/afrimine_temp/android $GITHUB_WORKSPACE/src/frontend/
+          # Copy our code into the fresh project
+          cp -r /tmp/afrimine_save/lib/* /tmp/afrimine_build/lib/
+          cp /tmp/afrimine_save/pubspec.yaml /tmp/afrimine_build/
           
-          # Restore our custom main.dart
-          cp /tmp/main.dart $GITHUB_WORKSPACE/src/frontend/lib/main.dart
+          # Build
+          cd /tmp/afrimine_build
+          flutter pub get
+          flutter build apk --release
           
-          # Clean up
-          rm -rf /tmp/afrimine_temp /tmp/main.dart
-
-      - name: Install dependencies
-        working-directory: src/frontend
-        run: flutter pub get
-
-      - name: Build APK
-        working-directory: src/frontend
-        run: flutter build apk --release
+          # Copy APK back
+          mkdir -p $GITHUB_WORKSPACE/build
+          cp build/app/outputs/flutter-apk/app-release.apk $GITHUB_WORKSPACE/
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: afrimine-apk
-          path: src/frontend/build/app/outputs/flutter-apk/app-release.apk
+          path: app-release.apk
           retention-days: 90
