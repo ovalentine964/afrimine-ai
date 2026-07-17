@@ -1,0 +1,58 @@
+# Dependencies
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.eggs/
+venv/
+.env
+
+# Go
+vendor/
+*.exe
+*.test
+*.out
+
+# Flutter
+.dart_tool/
+.packages
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Data (too large for git)
+data/raw/
+data/processed/
+*.tif
+*.tiff
+*.hdf5
+
+# Secrets
+*.pem
+*.key
+secrets.yaml
+.env.local
+
+# Build artifacts
+dist/
+build/
+out/
+
+# Logs
+*.log
+logs/
+
+# Node
+node_modules/
