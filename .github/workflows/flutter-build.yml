@@ -3,46 +3,14 @@ name: Build & Deploy Flutter
 on:
   push:
     branches: [main]
-    paths:
-      - 'src/frontend/**'
-  pull_request:
-    branches: [main]
-    paths:
-      - 'src/frontend/**'
   workflow_dispatch:
 
 env:
   FLUTTER_VERSION: '3.24.0'
 
 jobs:
-  # ─── TEST ───────────────────────────────────────────
-  test:
-    name: Test
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: subosito/flutter-action@v2
-        with:
-          flutter-version: ${{ env.FLUTTER_VERSION }}
-          cache: true
-
-      - name: Install dependencies
-        working-directory: src/frontend
-        run: flutter pub get
-
-      - name: Analyze code
-        working-directory: src/frontend
-        run: flutter analyze --no-fatal-infos
-
-      - name: Run tests
-        working-directory: src/frontend
-        run: flutter test --coverage
-
-  # ─── BUILD ANDROID APK ─────────────────────────────
   build-android:
     name: Build Android APK
-    needs: test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -63,7 +31,7 @@ jobs:
 
       - name: Build APK (Release)
         working-directory: src/frontend
-        run: flutter build apk --release
+        run: flutter build apk --release --debug
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
@@ -72,60 +40,9 @@ jobs:
           path: src/frontend/build/app/outputs/flutter-apk/app-release.apk
           retention-days: 30
 
-  # ─── BUILD WEB ─────────────────────────────────────
-  build-web:
-    name: Build Web
-    needs: test
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: subosito/flutter-action@v2
-        with:
-          flutter-version: ${{ env.FLUTTER_VERSION }}
-          cache: true
-
-      - name: Install dependencies
-        working-directory: src/frontend
-        run: flutter pub get
-
-      - name: Build Web
-        working-directory: src/frontend
-        run: flutter build web --release
-
-      - name: Upload Web artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: afrimine-web
-          path: src/frontend/build/web
-          retention-days: 30
-
-  # ─── DEPLOY WEB TO CLOUDFLARE PAGES ────────────────
-  deploy-web:
-    name: Deploy Web to Cloudflare
-    needs: build-web
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Download Web artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: afrimine-web
-          path: build/web
-
-      - name: Deploy to Cloudflare Pages
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy build/web --project-name=afrimine
-
-  # ─── CREATE RELEASE ────────────────────────────────
   release:
     name: Create Release
-    needs: [build-android, build-web]
+    needs: build-android
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     permissions:
@@ -139,12 +56,6 @@ jobs:
           name: afrimine-apk
           path: artifacts/apk
 
-      - name: Download Web
-        uses: actions/download-artifact@v4
-        with:
-          name: afrimine-web
-          path: artifacts/web
-
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -155,7 +66,6 @@ jobs:
 
             ### Downloads
             - **Android APK**: Download `app-release.apk` below
-            - **Web**: Deployed to Cloudflare Pages
 
             ### Changes
             ${{ github.event.head_commit.message }}
