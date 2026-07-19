@@ -1,0 +1,114 @@
+# AfriMine AI — Staging Environment
+# docker compose -f docker-compose.staging.yml up -d
+
+name: afrimine-staging
+
+services:
+  # ── Go Backend API ──────────────────────────────
+  go-api:
+    build:
+      context: .
+      dockerfile: Dockerfile.go-backend
+      target: production
+    container_name: afrimine-api-staging
+    ports:
+      - "8080:8080"
+    environment:
+      PORT: 8080
+      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
+      SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY}
+      A2A_AGENT_URL: http://langgraph:8000
+      SENTRY_DSN: ${SENTRY_DSN}
+      LOG_LEVEL: debug
+      CORS_ORIGINS: https://staging.afrimine.com,http://localhost:3000
+    depends_on:
+      langgraph:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    networks:
+      - afrimine-staging
+
+  # ── Python LangGraph Agents ─────────────────────
+  langgraph:
+    build:
+      context: .
+      dockerfile: Dockerfile.python-agents
+      target: production
+    container_name: afrimine-agents-staging
+    ports:
+      - "8000:8000"
+    environment:
+      PORT: 8000
+      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY}
+      SUPABASE_DB_HOST: ${SUPABASE_DB_HOST}
+      SUPABASE_DB_PASSWORD: ${SUPABASE_DB_PASSWORD}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY}
+      GROQ_API_KEY: ${GROQ_API_KEY}
+      MISTRAL_API_KEY: ${MISTRAL_API_KEY}
+      LANGSMITH_API_KEY: ${LANGSMITH_API_KEY}
+      SENTRY_DSN: ${SENTRY_DSN}
+      LOG_LEVEL: debug
+      LANGGRAPH_ENV: staging
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    networks:
+      - afrimine-staging
+
+  # ── Cloudflare Worker (local dev) ───────────────
+  # Only for local testing — production uses Cloudflare edge
+  api-proxy:
+    image: node:22-alpine
+    container_name: afrimine-proxy-staging
+    working_dir: /app
+    volumes:
+      - ./cloudflare:/app
+    ports:
+      - "8787:8787"
+    command: ["npx", "wrangler", "dev", "--port", "8787", "--local"]
+    environment:
+      RAILWAY_URL: http://go-api:8080
+    depends_on:
+      - go-api
+    networks:
+      - afrimine-staging
+    profiles:
+      - dev
+
+  # ── Redis (optional, for caching) ───────────────
+  redis:
+    image: redis:7-alpine
+    container_name: afrimine-redis-staging
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --maxmemory 64mb --maxmemory-policy allkeys-lru
+    networks:
+      - afrimine-staging
+    profiles:
+      - cache
+
+  # ── Monitoring: Sentry self-hosted (optional) ───
+  # Use Sentry SaaS free tier instead — this is for air-gapped environments
+  # sentry:
+  #   image: sentry:latest
+  #   ...
+
+volumes:
+  redis-data:
+
+networks:
+  afrimine-staging:
+    driver: bridge

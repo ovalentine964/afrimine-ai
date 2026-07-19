@@ -1,0 +1,56 @@
+# AfriMine AI — Go Backend API
+# Multi-stage build for minimal binary
+
+# ── Stage 1: Build ──────────────────────────────
+FROM golang:1.22-alpine AS builder
+
+RUN apk add --no-cache git ca-certificates tzdata
+
+WORKDIR /build
+
+# Cache dependencies
+COPY go.mod go.sum ./
+RUN go mod download && go mod verify
+
+# Copy source
+COPY . .
+
+# Build static binary
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+    go build \
+    -ldflags="-s -w -X main.version=$(git describe --tags --always 2>/dev/null || echo dev)" \
+    -o /build/bin/afrimine-api \
+    ./cmd/api
+
+# ── Stage 2: Production ─────────────────────────
+FROM alpine:3.20 AS production
+
+LABEL maintainer="AfriMine AI Team"
+LABEL description="AfriMine AI Go backend — Chi router, A2A gateway, file upload, sync"
+
+RUN apk add --no-cache \
+    ca-certificates \
+    tzdata \
+    curl \
+    && addgroup -S afrimine \
+    && adduser -S -G afrimine -h /app afrimine
+
+WORKDIR /app
+
+COPY --from=builder /build/bin/afrimine-api .
+COPY --from=builder /build/migrations/ ./migrations/
+
+RUN chown -R afrimine:afrimine /app
+
+USER afrimine
+
+ENV PORT=8080 \
+    GIN_MODE=release \
+    GOMAXPROCS=2
+
+EXPOSE 8080
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost:${PORT}/health || exit 1
+
+ENTRYPOINT ["./afrimine-api"]

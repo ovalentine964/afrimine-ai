@@ -1,0 +1,230 @@
+# AfriMine AI — Deploy to Production
+# Triggered on version tag push (v*.*.*)
+# Deploys: Flutter Web → Cloudflare Pages (production), Python agents → Railway (production)
+
+name: Deploy Production
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to deploy (e.g. v1.0.0)'
+        type: string
+        required: true
+      confirm:
+        description: 'Type "deploy-production" to confirm'
+        type: string
+        required: true
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+env:
+  FLUTTER_VERSION: '3.24'
+  PYTHON_VERSION: '3.12'
+
+jobs:
+  # ─────────────────────────────────────────────
+  # Gate: confirm production deploy
+  # ─────────────────────────────────────────────
+  gate:
+    name: Production Deploy Gate
+    runs-on: ubuntu-latest
+    if: >-
+      github.event_name == 'push' ||
+      (github.event_name == 'workflow_dispatch' && inputs.confirm == 'deploy-production')
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
+      version: ${{ steps.meta.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - id: meta
+        run: |
+          TAG="${{ inputs.tag || github.ref_name }}"
+          VERSION="${TAG#v}"
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "📦 Deploying $TAG (version $VERSION)"
+
+  # ─────────────────────────────────────────────
+  # Full test suite before production
+  # ─────────────────────────────────────────────
+  test:
+    name: Full Test Suite
+    runs-on: ubuntu-latest
+    needs: gate
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.gate.outputs.tag }}
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Go tests
+        run: |
+          go mod download
+          go test -v -race -coverprofile=coverage.out ./...
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Python tests
+        run: |
+          pip install -r requirements.txt
+          pip install pytest pytest-asyncio pytest-cov
+          pytest tests/ -v --tb=short --cov
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+
+      - name: Flutter tests
+        run: |
+          flutter pub get
+          flutter test --coverage
+
+  # ─────────────────────────────────────────────
+  # Deploy Flutter Web → Cloudflare Pages (production)
+  # ─────────────────────────────────────────────
+  deploy-frontend:
+    name: Deploy Frontend (Production)
+    runs-on: ubuntu-latest
+    needs: [gate, test]
+    environment:
+      name: production
+      url: https://afrimine.com
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.gate.outputs.tag }}
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+      - name: Build Flutter Web (production)
+        run: |
+          flutter pub get
+          flutter build web --release \
+            --dart-define=ENV=production \
+            --dart-define=API_URL=https://api.afrimine.com \
+            --dart-define=VERSION=${{ needs.gate.outputs.version }}
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: >-
+            pages deploy build/web
+            --project-name=afrimine-web
+            --branch=main
+            --commit-hash=${{ github.sha }}
+
+      - name: Purge CDN cache
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deployment create --project-name=afrimine-web
+
+  # ─────────────────────────────────────────────
+  # Deploy Go API → Railway (production)
+  # ─────────────────────────────────────────────
+  deploy-api:
+    name: Deploy Go API (Production)
+    runs-on: ubuntu-latest
+    needs: [gate, test]
+    environment:
+      name: production
+      url: https://api.afrimine.com
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.gate.outputs.tag }}
+
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      - name: Deploy Go backend to Railway
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_PRODUCTION_TOKEN }}
+        run: |
+          railway link --project afrimine-production
+          railway up --service go-api
+
+  # ─────────────────────────────────────────────
+  # Deploy Python Agents → Railway (production)
+  # ─────────────────────────────────────────────
+  deploy-agents:
+    name: Deploy Python Agents (Production)
+    runs-on: ubuntu-latest
+    needs: [gate, test]
+    environment:
+      name: production
+      url: https://api.afrimine.com/a2a
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.gate.outputs.tag }}
+
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      - name: Deploy LangGraph to Railway
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_PRODUCTION_TOKEN }}
+        run: |
+          railway link --project afrimine-production
+          railway up --service langgraph
+
+  # ─────────────────────────────────────────────
+  # Post-deploy verification
+  # ─────────────────────────────────────────────
+  verify:
+    name: Production Verification
+    runs-on: ubuntu-latest
+    needs: [deploy-frontend, deploy-api, deploy-agents]
+    if: always()
+    steps:
+      - name: Frontend health
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://afrimine.com)
+          [ "$STATUS" = "200" ] && echo "✅ Frontend OK" || echo "⚠️ Frontend HTTP $STATUS"
+
+      - name: API health
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://api.afrimine.com/health)
+          [ "$STATUS" = "200" ] && echo "✅ API OK" || { echo "❌ API HTTP $STATUS"; exit 1; }
+
+      - name: A2A health
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://api.afrimine.com/a2a/health)
+          [ "$STATUS" = "200" ] && echo "✅ A2A OK" || echo "⚠️ A2A HTTP $STATUS"
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.gate.outputs.tag }}
+          name: Release ${{ needs.gate.outputs.tag }}
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Notify team
+        if: failure()
+        run: |
+          echo "::error::Production deployment of ${{ needs.gate.outputs.tag }} FAILED. Immediate attention required."

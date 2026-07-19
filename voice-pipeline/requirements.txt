@@ -1,0 +1,45 @@
+# AfriMine AI Voice Pipeline — Dependencies
+# All open-source, $0 cost
+
+# === Speech-to-Text ===
+vosk==0.3.45                    # Offline STT engine, 50MB models, CPU-only
+groq==0.29.0                    # Groq API client (Whisper STT, fast LLM)
+sounddevice==0.5.1              # Audio capture from microphone
+numpy==1.26.4                   # Audio buffer processing
+pyaudio==0.2.14                 # Alternative audio capture (fallback)
+
+# === Text-to-Speech ===
+piper-tts==1.2.0                # Offline TTS, CPU-only, multiple languages
+# piper voices downloaded separately via: python -m piper.download_voices
+
+# === LLM / Agent Integration ===
+langgraph==0.2.0                # Agent graph framework
+langchain==0.3.0                # LLM orchestration
+langchain-google-genai==2.0.0   # Gemini 2.5 Flash (free tier)
+groq==0.29.0                    # Groq LLM (fast inference, free tier)
+
+# === Audio Processing ===
+scipy==1.14.0                   # Audio signal processing
+librosa==0.10.2                 # Audio analysis (noise detection)
+webrtcvad==2.0.10               # Voice Activity Detection (VAD)
+pydub==0.25.1                   # Audio format conversion
+
+# === Data & Config ===
+pyyaml==6.0.2                   # YAML config parsing (voice_commands.yaml)
+pydantic==2.8.0                 # Data validation
+aiohttp==3.10.0                 # Async HTTP for API calls
+aiofiles==24.1.0                # Async file I/O
+
+# === Language Support ===
+# No external deps — language detection is rule-based for speed
+# Translation uses Gemini free tier via langchain-google-genai
+
+# === Testing ===
+pytest==8.3.0
+pytest-asyncio==0.24.0
+pytest-mock==3.14.0
+
+# === Optional: Enhanced Features ===
+# sherpa-onnx==1.10.0           # Alternative offline STT (Flutter bindings)
+# kokoro==0.1.0                 # Alternative TTS (82M params, higher quality)
+# fish-audio-sdk==0.1.0         # Voice cloning TTS

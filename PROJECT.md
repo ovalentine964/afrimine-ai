@@ -1,74 +1,77 @@
 # AfriMine AI — Project Status
 
-## Current Phase: Architecture & Research ✅
-
-### Completed
-- [x] 8 specialized research swarms deployed and completed
-- [x] NVIDIA free offerings deep dive (25+ services cataloged)
-- [x] Architecture review with critical feedback
-- [x] Tech stack decisions finalized
-- [x] Professional repo created with all research
-
-### Next Phase: Architecture Finalization
-- [ ] Update architecture with NVIDIA findings (Jetson replaces Pi)
-- [ ] Create detailed API specification
-- [ ] Design database schema
-- [ ] Create Flutter project structure
-- [ ] Set up CI/CD pipeline
+**Last Updated:** July 19, 2026
+**Current Phase:** Engineering Complete → Integration & Testing
 
 ---
 
-## Finalized Tech Stack
+## Completed Phases
 
-| Layer | Technology | Cost |
-|-------|-----------|------|
-| Frontend | **Flutter (Dart)** | $0 |
-| Backend | **Go (Chi router)** | $0 |
-| AI Inference | **NVIDIA NIM API** (hosted) | $0 (free credits) |
-| AI Training | **NVIDIA TAO Toolkit** | $0 |
-| Edge Hardware | **NVIDIA Jetson Orin Nano** | $249 one-time |
-| Database | **PostgreSQL + PostGIS** | $0 |
-| Geostatistics | **NVIDIA RAPIDS** (cuML, cuSpatial) | $0 |
-| Model Serving | **NVIDIA Triton** (self-hosted) | $0 |
-| Quantum | **IBM Quantum + D-Wave** | $0 (free tiers) |
-| Storage | **MinIO** | $0 |
-| Maps | **MapLibre GL** | $0 |
-| Satellite | **Google Earth Engine** | $0 |
-| LLM Reports | **NVIDIA NIM** (Llama 3.1) | $0 (free credits) |
-| CI/CD | **Gitea + Woodpecker** | $0 |
-| Monitoring | **Prometheus + Grafana** | $0 |
-| SMS | **Africa's Talking** | ~$50-100/mo |
-| **TOTAL SOFTWARE** | | **$0** |
-| **TOTAL HARDWARE** | | **$249** (one Jetson kit) |
+### Phase 1: Research ✅ (July 13–19, 2026)
+- [x] 7 specialized research swarms deployed
+- [x] 80+ findings across voice, LLMs, multi-agent, quantum, AGI, open-source
+- [x] Weekly AI intelligence reports (docs/research/weekly/)
+- [x] CrewAI → LangGraph 1.0 migration decision
+
+### Phase 2: Architecture ✅ (July 19, 2026)
+- [x] Chief Architect delivered ARCHITECTURE_V3.md (86KB, 1,539 lines)
+- [x] 11 Architecture Decision Records (ADRs)
+- [x] Architecture Review Board: APPROVED WITH CONDITIONS (5.70/10)
+- [x] Remediation team fixed 6 blocking issues + 3 technical gaps
+- [x] Re-review: ALL 9 FIXES VERIFIED ✅
+
+### Phase 3: Action Designs ✅ (July 19, 2026)
+- [x] LangGraph migration code (3,120 lines, 14 files)
+- [x] Memory architecture (187KB, 13 files, 5-layer design)
+- [x] Voice pipeline (170KB, 10 files, 4 languages)
+- [x] Security hardening (155KB, 8 files, 7-layer defense)
+
+### Phase 4: Engineering ✅ (July 19, 2026)
+- [x] Team 1: Core Pipeline — 4,154 lines, 20 files (LangGraph agents)
+- [x] Team 2: API Layer — 2,677 lines, 15 files (Go + Chi)
+- [x] Team 3: Flutter App — 5,442 lines, 17 files (mobile/web)
+- [x] Team 4: DevOps — 15 files (CI/CD, Docker, monitoring)
 
 ---
 
-## NVIDIA Stack (Detailed)
+## Next Phase: Integration & Testing
 
-### MUST USE
-1. **NVIDIA Developer Program** — Free, sign up first
-2. **NVIDIA NIM** — Free hosted API at build.nvidia.com
-   - Llama 3.1 8B for geological reports
-   - Cosmos Reason2-8B for mineral image classification
-3. **NVIDIA TAO Toolkit** — Free training
-   - Fine-tune DINOv2/SigLip2 on mineral photos
-   - Export to TensorRT for Jetson deployment
-4. **NVIDIA RAPIDS** — Free, open-source
-   - cuML for kriging/geostatistics
-   - cuSpatial for spatial analysis
-5. **NVIDIA Jetson Orin Nano** — $249
-   - 100 TOPS AI performance
-   - Replaces Raspberry Pi
-   - Runs TAO-optimized models offline
+- [ ] Wire all components together (agents ↔ API ↔ Flutter)
+- [ ] Run integration tests end-to-end
+- [ ] Deploy to staging (Cloudflare + Railway)
+- [ ] Field test with real mineral samples
+- [ ] Performance benchmarks
+- [ ] Security audit
+- [ ] Production deployment
 
-### SHOULD USE
-6. **NVIDIA Inception Program** — Apply for free cloud credits
-7. **NVIDIA Triton** — Self-hosted model serving
-8. **NVIDIA NeMo** — Fine-tune LLM on geological data
+---
 
-### CRITICAL CORRECTION
-- **Earth-2 is NOT for satellite mineral mapping** — it's weather/climate only
-- Use **Google Earth Engine** (free) for Sentinel-2 satellite analysis
+## Key Architecture Decisions
+
+| Decision | Choice | Rationale |
+|----------|--------|-----------|
+| Agent Framework | **LangGraph 1.0** (replaced CrewAI) | Production-proven (Klarna, Replit, Uber), graph-based orchestration, persistent state |
+| Primary LLM | **Gemini 2.5 Flash** | Free tier (1,500 req/day), vision capable, strong reasoning |
+| Database | **Supabase** | Free PostgreSQL + Auth + Storage + pgvector |
+| Frontend | **Flutter** | One codebase → Android + iOS + Web |
+| Backend | **Go (Chi)** | Single binary, edge-deployable, low memory |
+| Hosting | **Cloudflare + Railway** | Free frontend, $5/mo backend |
+| Voice | **Vosk + Piper** | Offline, 50MB, CPU-only, 4 languages |
+| Quantum | **IBM + D-Wave** | Free tiers for optimization |
+| Protocol | **A2A + MCP** | Industry standard, Go ↔ Python bridge |
+
+---
+
+## Cost Model
+
+| Stage | Monthly Cost | What's Included |
+|-------|-------------|-----------------|
+| **MVP** | $0 | All free tiers (Supabase, Gemini, Cloudflare, GitHub Actions) |
+| **Growth** | $50–100 | Supabase Pro, increased API calls |
+| **Scale** | $500–2,000 | Dedicated infra, higher LLM costs |
+| **Hardware** | $249–499 | Jetson Orin Nano (one-time) |
+
+**Per-analysis cost:** ~$0.003–0.004 (6 LLM calls × Gemini pricing)
 
 ---
 
@@ -76,34 +79,37 @@
 
 ```
 afrimine-ai/
-├── README.md
-├── LICENSE (MIT)
-├── CONTRIBUTING.md
-├── PROJECT.md (this file)
-├── docs/
-│   ├── architecture/
-│   │   └── system-architecture.md
-│   └── research/
-│       ├── nvidia-free-features.md ⭐ NEW
-│       ├── ai-mining-tools.md
-│       ├── quantum-mining.md
-│       ├── drone-sensors.md
-│       ├── financial-model.md
-│       ├── legal-playbook.md
-│       ├── implementation-roadmap.md
-│       └── mineral-detection-system.md
 ├── src/
-│   ├── backend/ (Go)
-│   ├── frontend/ (Flutter)
-│   ├── ai-engine/ (Python)
-│   ├── edge/ (Jetson)
-│   ├── satellite/ (GEE)
-│   └── quantum/ (Qiskit)
-├── scripts/
-├── tests/
-├── config/
-└── .github/
+│   ├── agents/          # LangGraph pipeline (Python) — 4,154 lines
+│   ├── backend/         # Go API (Chi) — 2,677 lines
+│   ├── frontend/        # Flutter app — 5,442 lines
+│   └── satellite/       # Google Earth Engine
+├── docs/research/weekly/# Weekly AI intelligence reports
+├── security/            # Security hardening docs
+├── memory-system/       # Memory architecture design
+├── voice-pipeline/      # Voice interface design
+├── langgraph-migration/ # Migration reference code
+├── .github/workflows/   # CI/CD (4 workflows)
+├── scripts/             # Setup, deploy, backup
+├── monitoring/          # Sentry + Uptime Robot
+├── ARCHITECTURE_V3.md   # Master architecture
+├── COST_MODEL_REAL.md   # Honest cost model
+├── DEPLOYMENT_DECISION.md
+└── TESTING_STRATEGY.md
 ```
+
+---
+
+## Team
+
+| Role | Status |
+|------|--------|
+| Founder | Valentine Cohusdex |
+| Architecture | ✅ Complete (reviewed + remediated) |
+| Engineering | ✅ Complete (4 teams, all delivered) |
+| Integration | 🔄 Next phase |
+| QA/Testing | 🔄 Next phase |
+| DevOps | ✅ CI/CD ready |
 
 ---
 
@@ -112,20 +118,15 @@ afrimine-ai/
 | Metric | Value |
 |--------|-------|
 | Chinese offer vs real value | 1M KES vs 28M+ KES (28:1 ratio) |
-| Total NVIDIA software cost | $0 |
-| Total edge hardware cost | $249 (one Jetson kit) |
-| MVP budget | $80-120K |
-| MVP timeline | 4 months |
-| Team size | 5 people |
-| Mineral classification accuracy target | >75% (MVP), >85% (Production) |
+| Total software cost | $0/month (MVP) |
+| Total hardware cost | $249 (one Jetson kit) |
+| Engineering output | ~12,000+ lines of production code |
+| Architecture docs | ~850KB across research + design |
+| Agent pipeline | 6 LangGraph agents, parallel execution |
+| Voice languages | 4 (English, Swahili, Dholuo, Kikuyu) |
+| Offline capability | 3+ days (phone storage) |
+| Mineral classification target | >75% (MVP), >85% (Production) |
 
 ---
 
-## Immediate Next Steps
-
-1. Valentine approves revised architecture (with Jetson + NVIDIA stack)
-2. Create GitHub repo (push this local repo)
-3. Apply for NVIDIA Inception Program
-4. Sign up for NVIDIA Developer Program
-5. Begin Phase 0 legal actions (see legal playbook)
-6. Recruit Flutter + Go developers
+**Status: Ready for integration and testing.**

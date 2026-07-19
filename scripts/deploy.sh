@@ -1,350 +1,220 @@
 #!/usr/bin/env bash
-# AfriMine AI — Deployment Script
-# Deploys to production (Render + Cloudflare Pages)
+# AfriMine AI — One-Command Deployment
+# Usage:
+#   ./scripts/deploy.sh staging     # Deploy to staging
+#   ./scripts/deploy.sh production  # Deploy to production (requires tag)
+#   ./scripts/deploy.sh production v1.0.0  # Deploy specific tag to production
+
 set -euo pipefail
 
+# ── Colors ───────────────────────────────────────
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
 NC='\033[0m'
 
-log()  { echo -e "${GREEN}[✓]${NC} $1"; }
-warn() { echo -e "${YELLOW}[!]${NC} $1"; }
-err()  { echo -e "${RED}[✗]${NC} $1"; exit 1; }
+log()   { echo -e "${GREEN}[deploy]${NC} $*"; }
+warn()  { echo -e "${YELLOW}[warn]${NC} $*"; }
+error() { echo -e "${RED}[error]${NC} $*" >&2; }
+info()  { echo -e "${BLUE}[info]${NC} $*"; }
 
-# ── Configuration ────────────────────────────────────────
-DEPLOY_TARGET="${1:-all}"   # all | frontend | backend | ai-engine | db
-ENV_FILE="${2:-.env.production}"
-DEPLOY_LOG=".deploy.log"
-ROLLBACK_FILE=".deploy_rollback.json"
+# ── Parse Arguments ──────────────────────────────
+ENV="${1:-}"
+TAG="${2:-}"
 
-# ── Safe environment loading ─────────────────────────────
-load_env() {
-    local file="$1"
-    if [ ! -f "$file" ]; then
-        err "Environment file not found: $file"
+if [[ -z "$ENV" ]] || [[ "$ENV" != "staging" && "$ENV" != "production" ]]; then
+    error "Usage: ./scripts/deploy.sh <staging|production> [tag]"
+    error ""
+    error "  staging              Deploy current branch to staging"
+    error "  production           Deploy current HEAD to production"
+    error "  production v1.0.0    Deploy specific tag to production"
+    exit 1
+fi
+
+# ── Preflight Checks ────────────────────────────
+log "Running preflight checks..."
+
+# Check required tools
+for cmd in git docker curl; do
+    if ! command -v "$cmd" &>/dev/null; then
+        error "Required tool not found: $cmd"
+        exit 1
     fi
+done
 
-    # Validate file permissions (should not be world-readable)
-    local perms
-    perms=$(stat -c %a "$file" 2>/dev/null || stat -f %Lp "$file" 2>/dev/null || echo "unknown")
-    if [ "$perms" != "unknown" ] && [ "${perms: -1}" -ge 4 ]; then
-        warn "Environment file $file is world-readable (perms: $perms). Consider: chmod 600 $file"
+# Check Railway CLI
+if ! command -v railway &>/dev/null; then
+    warn "Railway CLI not found. Installing..."
+    npm install -g @railway/cli 2>/dev/null || {
+        error "Failed to install Railway CLI. Install manually: npm install -g @railway/cli"
+        exit 1
+    }
+fi
+
+# Check Wrangler CLI
+if ! command -v wrangler &>/dev/null; then
+    warn "Wrangler CLI not found. Installing..."
+    npm install -g wrangler 2>/dev/null || {
+        error "Failed to install Wrangler. Install manually: npm install -g wrangler"
+        exit 1
+    }
+fi
+
+# Check git status
+if [[ -n "$(git status --porcelain)" ]]; then
+    warn "Working directory has uncommitted changes."
+    if [[ "$ENV" == "production" ]]; then
+        error "Cannot deploy to production with uncommitted changes. Commit first."
+        exit 1
     fi
+    read -rp "Continue with uncommitted changes? (y/N) " confirm
+    [[ "$confirm" =~ ^[Yy]$ ]] || exit 0
+fi
 
-    # Source with validation — only allow KEY=VALUE lines, skip comments and empty lines
-    while IFS='=' read -r key value; do
-        # Skip comments and empty lines
-        [[ -z "$key" || "$key" =~ ^[[:space:]]*# ]] && continue
-        # Trim whitespace
-        key=$(echo "$key" | xargs)
-        # Validate key format (alphanumeric + underscore only)
-        if [[ ! "$key" =~ ^[A-Z_][A-Z0-9_]*$ ]]; then
-            warn "Skipping invalid env var name: $key"
-            continue
-        fi
-        # Remove surrounding quotes from value
-        value=$(echo "$value" | sed 's/^["'\'']\(.*\)["'\'']$/\1/')
-        export "$key=$value"
-    done < "$file"
-}
+# ── Environment Configuration ───────────────────
+if [[ "$ENV" == "staging" ]]; then
+    RAILWAY_PROJECT="afrimine-staging"
+    RAILWAY_SERVICE_API="go-api-staging"
+    RAILWAY_SERVICE_AGENTS="langgraph-staging"
+    CF_PAGES_PROJECT="afrimine-web"
+    CF_BRANCH="staging"
+    API_URL="https://staging-api.afrimine.com"
+    FRONTEND_URL="https://staging.afrimine.com"
+    DEPLOY_TAG=$(git rev-parse --short HEAD)
+else
+    RAILWAY_PROJECT="afrimine-production"
+    RAILWAY_SERVICE_API="go-api"
+    RAILWAY_SERVICE_AGENTS="langgraph"
+    CF_PAGES_PROJECT="afrimine-web"
+    CF_BRANCH="main"
+    API_URL="https://api.afrimine.com"
+    FRONTEND_URL="https://afrimine.com"
+    DEPLOY_TAG="${TAG:-$(git describe --tags --always 2>/dev/null || git rev-parse --short HEAD)}"
+fi
 
-# ── Deploy state tracking ────────────────────────────────
-track_deploy() {
-    local target="$1"
-    local status="$2"
-    local version="${3:-unknown}"
-    local timestamp
-    timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+log "Deploying to ${ENV} (tag: ${DEPLOY_TAG})"
 
-    echo "{\"target\":\"$target\",\"status\":\"$status\",\"version\":\"$version\",\"timestamp\":\"$timestamp\"}" >> "$DEPLOY_LOG"
+# ── Step 1: Build Flutter Web ───────────────────
+log "Step 1/5: Building Flutter Web..."
 
-    # Save rollback info
-    if [ "$status" = "started" ]; then
-        echo "{\"target\":\"$target\",\"version\":\"$version\",\"timestamp\":\"$timestamp\"}" > "$ROLLBACK_FILE"
-    fi
-}
-
-# ── Rollback function ────────────────────────────────────
-rollback() {
-    local target="$1"
-    warn "Initiating rollback for: $target"
-
-    if [ ! -f "$ROLLBACK_FILE" ]; then
-        warn "No rollback information found. Manual rollback required."
-        echo "  1. Check Render dashboard for previous deploy"
-        echo "  2. Redeploy from a known-good commit"
-        return 1
-    fi
-
-    case "$target" in
-        backend|ai-engine)
-            warn "Render.com auto-deploy rollback:"
-            echo "  1. Go to Render dashboard → $target service"
-            echo "  2. Click 'Manual Deploy' → select previous commit"
-            echo "  3. Or revert the git commit and push to trigger auto-deploy"
-            ;;
-        frontend)
-            warn "Cloudflare Pages rollback:"
-            echo "  1. Go to Cloudflare Pages → afrimine-ai project"
-            echo "  2. Click 'Deployments' → find previous working deployment"
-            echo "  3. Click '...' → 'Rollback to this deployment'"
-            ;;
-        db)
-            warn "Database rollback requires manual intervention:"
-            echo "  1. Check Supabase dashboard → SQL Editor"
-            echo "  2. Run the DOWN migration if available"
-            echo "  3. Restore from backup: scripts/backup.sh"
-            ;;
-    esac
-
-    log "Rollback instructions provided for: $target"
-}
-
-echo "═══════════════════════════════════════════"
-echo "  AfriMine AI — Production Deploy"
-echo "  Target: $DEPLOY_TARGET"
-echo "═══════════════════════════════════════════"
-echo ""
-
-# ── Pre-flight checks ───────────────────────────────────
-check_env() {
-    local var="$1"
-    if [ -z "${!var:-}" ]; then
-        err "Missing required env var: $var"
-    fi
-}
-
-load_env "$ENV_FILE"
-
-# Get current git version for tracking
-DEPLOY_VERSION=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
-log "Deploying version: $DEPLOY_VERSION"
-
-# ── Deploy Frontend (Cloudflare Pages) ───────────────────
-deploy_frontend() {
-    echo "── Deploying Frontend ──────────────────"
-    track_deploy "frontend" "started" "$DEPLOY_VERSION"
-
-    if ! command -v flutter &>/dev/null; then
-        err "Flutter not found. Install Flutter to build the web app."
-    fi
-
-    cd src/frontend
-
-    log "Building Flutter web..."
+if command -v flutter &>/dev/null; then
     flutter pub get
-    if ! flutter build web --release \
-        --dart-define=SUPABASE_URL="${SUPABASE_URL}" \
-        --dart-define=SUPABASE_ANON_KEY="${SUPABASE_ANON_KEY}" \
-        --dart-define=API_BASE_URL="${API_BASE_URL:-https://api.afrimine.ai}"; then
-        track_deploy "frontend" "failed" "$DEPLOY_VERSION"
-        err "Flutter build failed"
+    flutter build web --release \
+        --dart-define=ENV="${ENV}" \
+        --dart-define=API_URL="${API_URL}" \
+        --dart-define=VERSION="${DEPLOY_TAG}"
+    FLUTTER_BUILD_DIR="build/web"
+else
+    warn "Flutter not found locally. Using Docker for build..."
+    docker run --rm -v "$(pwd)":/app -w /app \
+        ghcr.io/cirruslabs/flutter:stable \
+        sh -c "flutter pub get && flutter build web --release --dart-define=ENV=${ENV} --dart-define=API_URL=${API_URL}"
+    FLUTTER_BUILD_DIR="build/web"
+fi
+
+log "  ✅ Flutter build complete"
+
+# ── Step 2: Build Docker Images ─────────────────
+log "Step 2/5: Building Docker images..."
+
+docker build -f Dockerfile.go-backend \
+    -t "afrimine-api:${DEPLOY_TAG}" \
+    --build-arg VERSION="${DEPLOY_TAG}" \
+    . 2>&1 | tail -3
+
+docker build -f Dockerfile.python-agents \
+    -t "afrimine-agents:${DEPLOY_TAG}" \
+    . 2>&1 | tail -3
+
+log "  ✅ Docker images built"
+
+# ── Step 3: Deploy Frontend to Cloudflare Pages ──
+log "Step 3/5: Deploying frontend to Cloudflare Pages..."
+
+if [[ -n "${CLOUDFLARE_API_TOKEN:-}" ]]; then
+    wrangler pages deploy "${FLUTTER_BUILD_DIR}" \
+        --project-name="${CF_PAGES_PROJECT}" \
+        --branch="${CF_BRANCH}" \
+        --commit-hash="$(git rev-parse HEAD)" 2>&1 | tail -3
+    log "  ✅ Frontend deployed to ${FRONTEND_URL}"
+else
+    warn "CLOUDFLARE_API_TOKEN not set. Skipping frontend deploy."
+    warn "Set it in your environment or GitHub Secrets."
+fi
+
+# ── Step 4: Deploy Backend to Railway ────────────
+log "Step 4/5: Deploying backend to Railway..."
+
+if [[ -n "${RAILWAY_TOKEN:-}" ]]; then
+    railway link --project "${RAILWAY_PROJECT}"
+
+    # Deploy Go API
+    log "  → Deploying Go API..."
+    railway up --service "${RAILWAY_SERVICE_API}" 2>&1 | tail -3
+
+    # Deploy Python Agents
+    log "  → Deploying Python LangGraph agents..."
+    railway up --service "${RAILWAY_SERVICE_AGENTS}" 2>&1 | tail -3
+
+    log "  ✅ Backend deployed"
+else
+    warn "RAILWAY_TOKEN not set. Skipping Railway deploy."
+    warn "Set it in your environment or GitHub Secrets."
+fi
+
+# ── Step 5: Health Verification ──────────────────
+log "Step 5/5: Verifying deployment..."
+
+sleep 10  # Give services time to start
+
+HEALTH_OK=true
+
+# Check API
+for i in {1..6}; do
+    if curl -sf "${API_URL}/health" > /dev/null 2>&1; then
+        log "  ✅ API health: OK"
+        break
     fi
-
-    log "Build complete: $(du -sh build/web | cut -f1)"
-
-    if command -v wrangler &>/dev/null; then
-        log "Deploying to Cloudflare Pages..."
-        if ! wrangler pages deploy build/web \
-            --project-name="${CLOUDFLARE_PAGES_PROJECT:-afrimine-ai}" \
-            --branch=main; then
-            track_deploy "frontend" "failed" "$DEPLOY_VERSION"
-            rollback "frontend"
-            err "Frontend deployment failed"
-        fi
-        log "Frontend deployed to Cloudflare Pages"
-    elif [ -n "${CLOUDFLARE_API_TOKEN:-}" ]; then
-        log "Installing wrangler..."
-        npm install -g wrangler
-        if ! wrangler pages deploy build/web \
-            --project-name="${CLOUDFLARE_PAGES_PROJECT:-afrimine-ai}" \
-            --branch=main; then
-            track_deploy "frontend" "failed" "$DEPLOY_VERSION"
-            rollback "frontend"
-            err "Frontend deployment failed"
-        fi
-        log "Frontend deployed to Cloudflare Pages"
-    else
-        warn "No Cloudflare credentials found. Manual deploy needed:"
-        echo "  1. Go to Cloudflare Pages dashboard"
-        echo "  2. Upload build/web directory"
+    if [[ $i -eq 6 ]]; then
+        warn "  ⚠️  API health check failed after 6 attempts"
+        HEALTH_OK=false
     fi
+    sleep 10
+done
 
-    track_deploy "frontend" "completed" "$DEPLOY_VERSION"
-    cd ../..
-}
+# Check A2A
+if curl -sf "${API_URL}/a2a/health" > /dev/null 2>&1; then
+    log "  ✅ A2A health: OK"
+else
+    warn "  ⚠️  A2A health check failed"
+    HEALTH_OK=false
+fi
 
-# ── Deploy Backend (Render.com via deploy hook) ──────────
-deploy_backend() {
-    echo "── Deploying Backend ───────────────────"
-    track_deploy "backend" "started" "$DEPLOY_VERSION"
+# Check Frontend
+if curl -sf "${FRONTEND_URL}" > /dev/null 2>&1; then
+    log "  ✅ Frontend: OK"
+else
+    warn "  ⚠️  Frontend check failed"
+    HEALTH_OK=false
+fi
 
-    if [ -n "${RENDER_DEPLOY_HOOK_BACKEND:-}" ]; then
-        log "Triggering Render deploy (backend)..."
-        HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "${RENDER_DEPLOY_HOOK_BACKEND}" || echo "000")
-        if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "202" ]; then
-            log "Backend deploy triggered (HTTP $HTTP_CODE)"
-            track_deploy "backend" "triggered" "$DEPLOY_VERSION"
-        else
-            track_deploy "backend" "failed" "$DEPLOY_VERSION"
-            rollback "backend"
-            err "Render returned HTTP $HTTP_CODE — deploy hook failed"
-        fi
-    else
-        warn "No Render deploy hook set. Add RENDER_DEPLOY_HOOK_BACKEND to $ENV_FILE"
-        track_deploy "backend" "skipped" "$DEPLOY_VERSION"
-    fi
-}
-
-# ── Deploy AI Engine (Render.com via deploy hook) ────────
-deploy_ai_engine() {
-    echo "── Deploying AI Engine ─────────────────"
-    track_deploy "ai-engine" "started" "$DEPLOY_VERSION"
-
-    if [ -n "${RENDER_DEPLOY_HOOK_AI_ENGINE:-}" ]; then
-        log "Triggering Render deploy (AI engine)..."
-        HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "${RENDER_DEPLOY_HOOK_AI_ENGINE}" || echo "000")
-        if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "202" ]; then
-            log "AI engine deploy triggered (HTTP $HTTP_CODE)"
-            track_deploy "ai-engine" "triggered" "$DEPLOY_VERSION"
-        else
-            track_deploy "ai-engine" "failed" "$DEPLOY_VERSION"
-            rollback "ai-engine"
-            err "Render returned HTTP $HTTP_CODE — deploy hook failed"
-        fi
-    else
-        warn "No Render deploy hook set. Add RENDER_DEPLOY_HOOK_AI_ENGINE to $ENV_FILE"
-        track_deploy "ai-engine" "skipped" "$DEPLOY_VERSION"
-    fi
-}
-
-# ── Run Database Migrations ──────────────────────────────
-deploy_db() {
-    echo "── Running DB Migrations ───────────────"
-    track_deploy "db" "started" "$DEPLOY_VERSION"
-
-    if command -v supabase &>/dev/null; then
-        log "Pushing migrations to Supabase..."
-        if ! supabase db push; then
-            track_deploy "db" "failed" "$DEPLOY_VERSION"
-            rollback "db"
-            err "Database migration failed"
-        fi
-        log "Database migrations applied"
-        track_deploy "db" "completed" "$DEPLOY_VERSION"
-    else
-        warn "Supabase CLI not found. Install: npm i -g supabase"
-        echo "  Or run migrations manually via Supabase dashboard SQL editor"
-        track_deploy "db" "skipped" "$DEPLOY_VERSION"
-    fi
-}
-
-# ── Health Check ─────────────────────────────────────────
-health_check() {
-    echo "── Health Check ────────────────────────"
-    local url="${1:-https://api.afrimine.ai/health}"
-    local retries=5
-    local delay=10
-    local timeout=15
-
-    for i in $(seq 1 $retries); do
-        local response
-        local http_code
-        response=$(curl -sf --max-time "$timeout" -w "\n%{http_code}" "$url" 2>/dev/null) || {
-            warn "Attempt $i/$retries — service not ready, waiting ${delay}s..."
-            sleep $delay
-            continue
-        }
-
-        http_code=$(echo "$response" | tail -1)
-        local body
-        body=$(echo "$response" | head -n -1)
-
-        if [ "$http_code" = "200" ]; then
-            # Verify response contains expected health indicator
-            if echo "$body" | grep -q '"healthy"' || echo "$body" | grep -q '"status"'; then
-                log "Health check passed: $url"
-                log "Response: $body"
-                return 0
-            else
-                warn "Attempt $i/$retries — unexpected response body, waiting ${delay}s..."
-            fi
-        else
-            warn "Attempt $i/$retries — HTTP $http_code, waiting ${delay}s..."
-        fi
-        sleep $delay
-    done
-
-    err "Health check failed after $retries attempts"
-}
-
-# ── Post-deploy validation ───────────────────────────────
-validate_deploy() {
-    echo "── Post-Deploy Validation ──────────────"
-    local errors=0
-
-    # Check backend health
-    if ! health_check "https://api.afrimine.ai/health" 2>/dev/null; then
-        warn "Backend health check failed"
-        ((errors++))
-    fi
-
-    # Check AI engine health
-    if ! health_check "https://api.afrimine.ai/ai/health" 2>/dev/null; then
-        warn "AI engine health check failed"
-        ((errors++))
-    fi
-
-    if [ "$errors" -gt 0 ]; then
-        warn "$errors service(s) failed post-deploy validation"
-        warn "Consider running: $0 rollback"
-        return 1
-    fi
-
-    log "All services healthy post-deploy"
-}
-
-# ── Execute ──────────────────────────────────────────────
-trap 'echo ""; warn "Deploy interrupted!"; exit 130' INT TERM
-
-case "$DEPLOY_TARGET" in
-    frontend)
-        deploy_frontend
-        ;;
-    backend)
-        deploy_backend
-        ;;
-    ai-engine)
-        deploy_ai_engine
-        ;;
-    db)
-        deploy_db
-        ;;
-    rollback)
-        if [ -n "${2:-}" ]; then
-            rollback "$2"
-        else
-            echo "Usage: $0 rollback <target>"
-            echo "Targets: frontend, backend, ai-engine, db"
-            exit 1
-        fi
-        ;;
-    all)
-        deploy_db
-        deploy_backend
-        deploy_ai_engine
-        deploy_frontend
-        echo ""
-        validate_deploy
-        ;;
-    *)
-        err "Unknown target: $DEPLOY_TARGET. Use: all|frontend|backend|ai-engine|db|rollback"
-        ;;
-esac
-
+# ── Summary ──────────────────────────────────────
 echo ""
-echo "═══════════════════════════════════════════"
-echo "  ✅ Deployment complete!"
-echo "  Version: $DEPLOY_VERSION"
-echo "═══════════════════════════════════════════"
+log "══════════════════════════════════════════════"
+log "  Deployment Summary"
+log "══════════════════════════════════════════════"
+log "  Environment:  ${ENV}"
+log "  Tag:          ${DEPLOY_TAG}"
+log "  Frontend:     ${FRONTEND_URL}"
+log "  API:          ${API_URL}"
+log "  A2A:          ${API_URL}/a2a"
+log "══════════════════════════════════════════════"
+
+if [[ "$HEALTH_OK" == "true" ]]; then
+    log "  Status:       ✅ All services healthy"
+    exit 0
+else
+    warn "  Status:       ⚠️  Some checks failed — verify manually"
+    exit 1
+fi

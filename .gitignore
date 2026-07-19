@@ -65,3 +65,8 @@ docker/nginx/ssl/
 
 # Supabase
 .supabase/
+
+# Temporary / workspace
+.openclaw/
+*.tmp
+*.bak

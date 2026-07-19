@@ -1,0 +1,53 @@
+# AfriMine AI — LangGraph Migration Dependencies
+# ================================================
+# Core framework: LangGraph 1.0 (GA) + LangChain ecosystem
+# LLM: Google Gemini 2.5 Flash (free tier: 1,500 req/day)
+# Checkpointer: PostgreSQL (Supabase free tier: 500MB)
+# Protocol: A2A (JSON-RPC 2.0) for Go ↔ Python bridge
+
+# --- LangGraph Core ---
+langgraph>=0.4.0,<1.0.0        # State graph orchestration (1.0 GA)
+langgraph-checkpoint>=2.0.0    # Checkpoint base
+langgraph-checkpoint-postgres>=2.0.0  # Supabase/Postgres checkpointer
+
+# --- LangChain Ecosystem ---
+langchain>=0.3.0               # Core LangChain (required by LangGraph)
+langchain-core>=0.3.0          # Core abstractions
+langchain-google-genai>=2.1.0  # Gemini 2.5 Flash integration
+langchain-community>=0.3.0     # Community integrations
+
+# --- Database & State ---
+psycopg2-binary>=2.9.9         # PostgreSQL driver (Supabase)
+supabase>=2.0.0                # Supabase Python client
+asyncpg>=0.30.0                # Async PostgreSQL (checkpointer)
+
+# --- HTTP & API ---
+fastapi>=0.115.0               # A2A bridge HTTP server
+uvicorn[standard]>=0.34.0      # ASGI server for FastAPI
+httpx>=0.28.0                  # Async HTTP client (A2A protocol)
+aiohttp>=3.11.0                # Async HTTP (market data fetching)
+
+# --- Data & Validation ---
+pydantic>=2.10.0               # Data validation (state schemas)
+pydantic-settings>=2.7.0       # Environment config management
+
+# --- PDF Report Generation ---
+reportlab>=4.2.0               # PDF generation for investor reports
+jinja2>=3.1.5                  # Template engine for report layouts
+
+# --- Market Data ---
+yfinance>=0.2.50               # Gold/copper price data (Yahoo Finance)
+metalpriceapi>=1.0.0           # Precious metals API (backup)
+
+# --- Geology & Mining ---
+numpy>=2.0.0                   # Numerical operations
+scipy>=1.15.0                  # Statistical analysis
+
+# --- Logging & Observability ---
+structlog>=24.4.0              # Structured logging
+langsmith>=0.3.0               # LangSmith tracing (free: 5K traces/mo)
+
+# --- Utilities ---
+python-dotenv>=1.0.1           # Environment variable management
+tenacity>=9.0.0                # Retry logic with exponential backoff
+orjson>=3.10.0                 # Fast JSON serialization

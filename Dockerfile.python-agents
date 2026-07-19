@@ -1,0 +1,72 @@
+# AfriMine AI — Python LangGraph Agents
+# Railway deployment image
+# Multi-stage build for minimal image size
+
+# ── Stage 1: Build ──────────────────────────────
+FROM python:3.12-slim AS builder
+
+WORKDIR /build
+
+# Install system deps for building Python packages
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
+
+# ── Stage 2: Production ─────────────────────────
+FROM python:3.12-slim AS production
+
+LABEL maintainer="AfriMine AI Team"
+LABEL description="LangGraph 6-agent orchestrator for mineral analysis"
+LABEL org.opencontainers.image.source="https://github.com/ovalentine964/afrimine-ai"
+
+# Runtime system deps only
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq5 \
+    curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd -r afrimine && useradd -r -g afrimine -d /app afrimine
+
+WORKDIR /app
+
+# Copy installed Python packages from builder
+COPY --from=builder /install /usr/local
+
+# Copy application code
+COPY agents/ ./agents/
+COPY tools/ ./tools/
+COPY security/ ./security/
+COPY mcp/ ./mcp/
+COPY a2a_bridge.py .
+COPY state_schema.py .
+COPY graph.py .
+COPY config.py .
+
+# Create directories for runtime
+RUN mkdir -p /app/logs /app/cache && \
+    chown -R afrimine:afrimine /app
+
+USER afrimine
+
+# Environment defaults (overridden by Railway)
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PORT=8000 \
+    LOG_LEVEL=info \
+    LANGGRAPH_ENV=production
+
+EXPOSE 8000
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
+    CMD curl -f http://localhost:${PORT}/health || exit 1
+
+# Run with uvicorn — persistent process, no cold starts
+CMD ["python", "-m", "uvicorn", "a2a_bridge:app", \
+     "--host", "0.0.0.0", "--port", "8000", \
+     "--workers", "1", \
+     "--log-level", "info", \
+     "--access-log", \
+     "--timeout-keep-alive", "300"]

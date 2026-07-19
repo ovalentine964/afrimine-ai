@@ -1,0 +1,1 @@
+"""AfriMine AI — Memory Package."""

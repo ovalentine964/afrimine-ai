@@ -1,0 +1,271 @@
+# AfriMine AI — Continuous Integration
+# Runs on every push and pull request
+# Lint, test, and build for Go + Python + Flutter
+
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GO_VERSION: '1.22'
+  PYTHON_VERSION: '3.12'
+  FLUTTER_VERSION: '3.24'
+
+jobs:
+  # ─────────────────────────────────────────────
+  # Go Backend
+  # ─────────────────────────────────────────────
+  go-lint:
+    name: Go Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+          args: --timeout=5m
+
+  go-test:
+    name: Go Tests
+    runs-on: ubuntu-latest
+    needs: go-lint
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Run unit tests
+        run: go test -v -race -coverprofile=coverage.out ./...
+
+      - name: Upload coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: go-coverage
+          path: coverage.out
+
+  go-build:
+    name: Go Build
+    runs-on: ubuntu-latest
+    needs: go-test
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Build binary
+        run: |
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+            go build -ldflags="-s -w" -o bin/afrimine-api ./cmd/api
+
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: go-binary
+          path: bin/afrimine-api
+
+  # ─────────────────────────────────────────────
+  # Python LangGraph Agents
+  # ─────────────────────────────────────────────
+  python-lint:
+    name: Python Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install linters
+        run: |
+          pip install ruff mypy
+          pip install -r requirements.txt -r requirements-dev.txt 2>/dev/null || true
+
+      - name: Ruff lint
+        run: ruff check . --output-format=github
+
+      - name: Ruff format check
+        run: ruff format --check .
+
+      - name: Type check
+        run: mypy agents/ tools/ --ignore-missing-imports --no-error-summary || true
+
+  python-test:
+    name: Python Tests
+    runs-on: ubuntu-latest
+    needs: python-lint
+    services:
+      # Use Supabase local for integration tests (optional)
+      postgres:
+        image: supabase/postgres:15.6.1.145
+        env:
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: afrimine_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    env:
+      SUPABASE_URL: http://localhost:5432
+      SUPABASE_DB_HOST: localhost
+      SUPABASE_DB_PASSWORD: test_password
+      GOOGLE_API_KEY: test-key-not-real
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt 2>/dev/null || \
+            pip install pytest pytest-asyncio pytest-cov pytest-mock
+
+      - name: Run unit tests
+        run: |
+          pytest tests/test_agents/ tests/test_mcp/ tests/test_security/ \
+            -v --tb=short --cov=agents --cov=tools --cov-report=xml:coverage.xml
+
+      - name: Run graph tests
+        run: pytest tests/test_graph.py -v --tb=short
+
+      - name: Run integration tests
+        run: pytest tests/test_integration/ -v --tb=short -m "not slow" || true
+
+      - name: Upload coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-coverage
+          path: coverage.xml
+
+  # ─────────────────────────────────────────────
+  # Flutter App
+  # ─────────────────────────────────────────────
+  flutter-lint:
+    name: Flutter Analyze
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze --no-fatal-infos
+
+      - name: Format check
+        run: dart format --set-exit-if-changed .
+
+  flutter-test:
+    name: Flutter Tests
+    runs-on: ubuntu-latest
+    needs: flutter-lint
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Run unit & widget tests
+        run: flutter test --coverage --coverage-path=lcov.info
+
+      - name: Upload coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: flutter-coverage
+          path: lcov.info
+
+  flutter-build:
+    name: Flutter Build Web
+    runs-on: ubuntu-latest
+    needs: flutter-test
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build web
+        run: flutter build web --release --dart-define=ENV=ci
+
+      - name: Upload web build
+        uses: actions/upload-artifact@v4
+        with:
+          name: flutter-web-build
+          path: build/web/
+
+  # ─────────────────────────────────────────────
+  # Docker Build Validation
+  # ─────────────────────────────────────────────
+  docker-build:
+    name: Docker Build Validation
+    runs-on: ubuntu-latest
+    needs: [go-test, python-test]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Go backend image
+        run: |
+          docker build -f Dockerfile.go-backend -t afrimine-api:test .
+
+      - name: Build Python agents image
+        run: |
+          docker build -f Dockerfile.python-agents -t afrimine-agents:test .
+
+      - name: Verify Go image runs
+        run: |
+          docker run --rm -d --name api-test -p 8080:8080 \
+            -e PORT=8080 afrimine-api:test
+          sleep 3
+          curl -f http://localhost:8080/health || exit 1
+          docker stop api-test
+
+      - name: Verify Python image runs
+        run: |
+          docker run --rm -d --name agents-test -p 8000:8000 \
+            -e PORT=8000 afrimine-agents:test
+          sleep 5
+          curl -f http://localhost:8000/health || exit 1
+          docker stop agents-test

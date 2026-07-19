@@ -1,0 +1,484 @@
+# AfriMine AI — Voice Command Definitions
+# Maps spoken commands to LangGraph agent workflows
+#
+# Structure:
+#   intent: unique identifier
+#   aliases: spoken variations in each language
+#   agent: which LangGraph agent handles this
+#   workflow: sequence of agent actions
+#   response_template: how to speak the result
+
+version: "1.0"
+
+# ============================================================
+# Core Mining Workflow Commands
+# ============================================================
+
+commands:
+  # --- Sample Analysis ---
+  analyze_sample:
+    description: "Analyze a mineral sample"
+    agent: mineral_analysis_agent
+    workflow:
+      - step: identify_sample_type
+        action: "Classify sample as rock, soil, or sediment"
+      - step: run_analysis
+        action: "Perform mineral identification (XRF, visual, spectral)"
+      - step: generate_findings
+        action: "Summarize findings with confidence scores"
+    aliases:
+      en:
+        - "analyze this sample"
+        - "check this sample"
+        - "test this sample"
+        - "examine this"
+        - "what is this rock"
+        - "identify this mineral"
+      sw:
+        - "chunguza sampuli hii"
+        - "angalia sampuli"
+        - "jaribu sampuli"
+        - "hii ni nini"
+        - "tathmini sampuli"
+      luo:
+        - "neyo sampul man"
+        - "nen sampul man"
+        - "chunguza sampul"
+      ki:
+        - "koruo sampuli"
+        - "andika sampuli iyi"
+        - "githii sampuli"
+    entities:
+      - name: sample_id
+        type: string
+        optional: true
+        description: "Sample identifier if known"
+      - name: location
+        type: coordinates
+        optional: true
+        description: "GPS coordinates of sample"
+    response_template:
+      en: "Analysis complete. {result}. Minerals detected: {minerals}. Confidence: {confidence}%."
+      sw: "Uchunguzi umekamilika. {result}. Madini yaliyopatikana: {minerals}. Uhakika: {confidence}%."
+
+  # --- Gold Detection ---
+  check_gold:
+    description: "Check if a sample contains gold"
+    agent: mineral_analysis_agent
+    workflow:
+      - step: gold_indicators
+        action: "Check for gold-associated minerals (quartz, pyrite, arsenopyrite)"
+      - step: xrf_analysis
+        action: "Run XRF for gold signature (Au L-alpha line)"
+      - step: calculate_grade
+        action: "Calculate gold grade in g/t if detected"
+    aliases:
+      en:
+        - "is there gold"
+        - "check for gold"
+        - "find gold"
+        - "gold content"
+        - "is this gold"
+        - "does this have gold"
+      sw:
+        - "kuna dhahabu"
+        - "angalia dhahabu"
+        - "pata dhahabu"
+        - "ni dhahabu"
+        - "ina dhahabu"
+        - "dhahabu iko"
+      luo:
+        - "en dhahabu"
+        - "nen dhahabu"
+        - "dhahabu en"
+      ki:
+        - "kuna dhahabu"
+        - "koruo dhahabu"
+    entities:
+      - name: sample_id
+        type: string
+        optional: true
+    response_template:
+      en: "Gold analysis: {result}. Grade: {grade} g/t. Associated minerals: {associated}."
+      sw: "Uchunguzi wa dhahabu: {result}. Kiwango: {grade} g/t. Madini yanayohusiana: {associated}."
+
+  # --- General Mineral Check ---
+  check_mineral:
+    description: "Identify what mineral a sample contains"
+    agent: mineral_analysis_agent
+    workflow:
+      - step: visual_id
+        action: "Visual identification (color, luster, hardness, crystal form)"
+      - step: xrf_scan
+        action: "XRF elemental scan"
+      - step: mineral_match
+        action: "Match against mineral database"
+    aliases:
+      en:
+        - "what mineral is this"
+        - "which mineral"
+        - "identify mineral"
+        - "what kind of rock"
+        - "type of mineral"
+        - "what is this"
+      sw:
+        - "madini gani"
+        - "aina gani ya madini"
+        - "tambua madini"
+        - "jiwe gani hii"
+      luo:
+        - "madini ang'o"
+        - "nen madini"
+      ki:
+        - "madini iria"
+        - "koruo madini"
+    response_template:
+      en: "Mineral identified: {mineral} ({formula}). Confidence: {confidence}%. Properties: {properties}."
+      sw: "Madini yametambuliwa: {mineral} ({formula}). Uhakika: {confidence}%. Sifa: {properties}."
+
+  # --- Report Generation ---
+  generate_report:
+    description: "Generate a geological report"
+    agent: report_agent
+    workflow:
+      - step: collect_data
+        action: "Gather all samples, notes, and analyses for the area"
+      - step: generate_report
+        action: "Create formatted geological report"
+      - step: export_pdf
+        action: "Export as PDF for sharing"
+    aliases:
+      en:
+        - "generate report"
+        - "create report"
+        - "make report"
+        - "write report"
+        - "pdf report"
+        - "geological report"
+      sw:
+        - "unda ripoti"
+        - "tengeneza ripoti"
+        - "andika ripoti"
+        - "ripoti ya kijiolojia"
+      luo:
+        - "weyo ripoti"
+        - "teko ripoti"
+      ki:
+        - "umbira ripoti"
+        - "utura ripoti"
+    entities:
+      - name: area
+        type: string
+        optional: true
+        description: "Specific area for the report"
+      - name: format
+        type: string
+        optional: true
+        default: "pdf"
+        description: "Output format (pdf, text, audio)"
+    response_template:
+      en: "Report generated. ID: {report_id}. Includes {sample_count} samples. {summary}."
+      sw: "Ripoti imeundwa. Nambari: {report_id}. Inajumuisha sampuli {sample_count}. {summary}."
+
+  # --- Market Prices ---
+  get_price:
+    description: "Get current mineral market prices"
+    agent: market_price_agent
+    workflow:
+      - step: fetch_price
+        action: "Get current commodity price from market API"
+      - step: calculate_local
+        action: "Convert to local currency (KES) and estimate land value"
+      - step: trend_analysis
+        action: "Show 30-day price trend"
+    aliases:
+      en:
+        - "what's the price"
+        - "how much is gold"
+        - "market price"
+        - "gold price"
+        - "what's it worth"
+        - "current value"
+        - "how much"
+      sw:
+        - "bei gani"
+        - "bei ya dhahabu"
+        - "thamani gani"
+        - "soko bei"
+        - "gharama"
+        - "thamani ya soko"
+      luo:
+        - "bei ang'o"
+        - "bei dhahabu"
+      ki:
+        - "giciirio"
+        - "bei ya dhahabu"
+    entities:
+      - name: commodity
+        type: string
+        optional: true
+        default: "gold"
+        description: "Commodity to check (gold, silver, copper, coltan)"
+    response_template:
+      en: "{commodity} price: ${price_usd}/oz. Local estimate: {price_kes} KES/acre. Trend: {trend}."
+      sw: "Bei ya {commodity}: ${price_usd}/oz. Makadirio ya ndani: {price_kes} KES/ekari. Mwelekeo: {trend}."
+
+  # --- Map/Satellite ---
+  show_map:
+    description: "Show satellite map of the area"
+    agent: geology_agent
+    workflow:
+      - step: get_location
+        action: "Get current GPS coordinates"
+      - step: fetch_imagery
+        action: "Fetch Sentinel-2 satellite imagery"
+      - step: analyze_features
+        action: "Identify geological features (faults, vegetation, water)"
+    aliases:
+      en:
+        - "show map"
+        - "satellite view"
+        - "where am i"
+        - "show location"
+        - "map of this area"
+        - "satellite image"
+      sw:
+        - "onyesha ramani"
+        - "satellite"
+        - "mahali gani"
+        - "wapi"
+        - "ramani ya hapa"
+      luo:
+        - "nyis map"
+        - "kaka en"
+      ki:
+        - "onania map"
+        - "kuhi"
+    response_template:
+      en: "Location: {coordinates}. Terrain: {terrain}. Notable features: {features}."
+      sw: "Mahali: {coordinates}. Mazingira: {terrain}. Mambo muhimu: {features}."
+
+  # --- Compliance ---
+  check_compliance:
+    description: "Check mining compliance and licensing"
+    agent: compliance_agent
+    workflow:
+      - step: check_license
+        action: "Verify mining license status"
+      - step: check_regulations
+        action: "Check current regulations for the area"
+      - step: generate_checklist
+        action: "Generate compliance checklist"
+    aliases:
+      en:
+        - "check compliance"
+        - "license status"
+        - "is this legal"
+        - "mining permit"
+        - "regulations"
+        - "compliance check"
+      sw:
+        - "angalia leseni"
+        - "hali ya leseni"
+        - "kibali"
+        - "kanuni"
+        - "kufuata sheria"
+      luo:
+        - "nen compliance"
+        - "leseni"
+      ki:
+        - "koruo compliance"
+        - "leseni"
+    response_template:
+      en: "License: {status}. Valid until: {expiry}. Requirements: {requirements}."
+      sw: "Leseni: {status}. Inaisha: {expiry}. Mahitaji: {requirements}."
+
+  # --- Save Note ---
+  save_note:
+    description: "Save a field note or observation"
+    agent: report_agent
+    workflow:
+      - step: save_note
+        action: "Store note with timestamp and GPS"
+      - step: link_samples
+        action: "Link to nearby samples if applicable"
+    aliases:
+      en:
+        - "save note"
+        - "remember this"
+        - "write down"
+        - "record this"
+        - "note"
+        - "take note"
+      sw:
+        - "hifadhi kumbuka"
+        - "kumbuka hii"
+        - "andika"
+        - "rekodi"
+      luo:
+        - "kata note"
+        - "kata"
+      ki:
+        - "andika"
+        - "nyorora"
+    entities:
+      - name: note_content
+        type: string
+        optional: false
+        description: "The note text"
+    response_template:
+      en: "Note saved. ID: {note_id}. Location: {location}."
+      sw: "Imehifadhiwa. Nambari: {note_id}. Mahali: {location}."
+
+  # --- Data Sync ---
+  sync_data:
+    description: "Sync offline data to cloud"
+    agent: report_agent
+    workflow:
+      - step: check_queue
+        action: "Count pending items"
+      - step: upload
+        action: "Upload to Supabase"
+      - step: confirm
+        action: "Confirm sync status"
+    aliases:
+      en:
+        - "sync data"
+        - "upload"
+        - "send data"
+        - "sync"
+        - "update cloud"
+      sw:
+        - "sawazisha"
+        - "tuma data"
+        - "upload"
+        - "sasisha"
+      luo:
+        - "sync data"
+        - "os data"
+      ki:
+        - "tumira data"
+        - "sync"
+    response_template:
+      en: "Sync complete. {synced_count} items uploaded. {pending_count} remaining."
+      sw: "Usawazishaji umekamilika. Vitu {synced_count} vimetumwa. {pending_count} vilivyobaki."
+
+  # --- System Commands ---
+  help:
+    description: "Show available commands"
+    agent: none
+    response_template:
+      en: "You can say: analyze sample, check gold, generate report, get price, show map, save note, or sync data."
+      sw: "Unaweza kusema: chunguza sampuli, angalia dhahabu, unda ripoti, bei ya soko, onyesha ramani, hifadhi kumbuka, au sawazisha data."
+
+  status:
+    description: "Show system status"
+    agent: none
+    response_template:
+      en: "Status: {mode}. Connectivity: {connectivity}. Pending sync: {pending}. Battery: {battery}%."
+      sw: "Hali: {mode}. Muunganisho: {connectivity}. Zinazosubiri: {pending}. Betri: {battery}%."
+
+  repeat:
+    description: "Repeat the last response"
+    agent: none
+    response_template:
+      en: "{last_response}"
+      sw: "{last_response}"
+
+  cancel:
+    description: "Cancel current operation"
+    agent: none
+    response_template:
+      en: "Cancelled."
+      sw: "Imesitishwa."
+
+# ============================================================
+# Compound Commands (multi-step workflows)
+# ============================================================
+
+compound_commands:
+  full_survey:
+    description: "Run a full geological survey of current area"
+    steps:
+      - show_map
+      - analyze_sample
+      - check_gold
+      - generate_report
+    aliases:
+      en: ["full survey", "complete survey", "survey this area"]
+      sw: ["ukamkamia kamili", "chunguza eneo zima"]
+
+  quick_check:
+    description: "Quick mineral check with price"
+    steps:
+      - check_mineral
+      - get_price
+    aliases:
+      en: ["quick check", "what's this worth", "check and price"]
+      sw: ["angalia haraka", "thamani gani hii"]
+
+# ============================================================
+# Mining-Specific Entity Patterns
+# ============================================================
+
+entity_patterns:
+  minerals:
+    - gold
+    - silver
+    - copper
+    - iron
+    - diamond
+    - coltan
+    - pyrite
+    - quartz
+    - magnetite
+    - hematite
+    - cassiterite
+    - galena
+    - chalcopyrite
+    - tungsten
+    - manganese
+    # Swahili
+    - dhahabu
+    - fedha
+    - shaba
+    - chuma
+    - almasi
+
+  units:
+    - g/t          # grams per tonne
+    - ppm          # parts per million
+    - ppb          # parts per billion
+    - oz           # ounces
+    - kg           # kilograms
+    - tonnes
+    - acres
+    - hectares
+
+  locations:
+    - nyatike
+    - migori
+    - kisumu
+    - nairobi
+    - homa bay
+    - siaya
+
+# ============================================================
+# Response Formatting Rules
+# ============================================================
+
+formatting:
+  # Always include confidence percentage
+  include_confidence: true
+
+  # Use local units (KES, acres) alongside international
+  dual_units: true
+
+  # Keep responses under 30 seconds of speech (~75 words)
+  max_words: 75
+
+  # Use simple language (field workers, not geologists)
+  reading_level: "basic"
+
+  # Include actionable next steps
+  include_next_steps: true

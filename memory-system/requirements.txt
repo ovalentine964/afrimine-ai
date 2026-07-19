@@ -1,0 +1,34 @@
+# AfriMine AI — Memory System Dependencies
+# All free / open-source / zero-cost
+
+# === Core ===
+supabase>=2.0.0              # Supabase Python client
+langgraph>=0.2.0             # LangGraph for agent orchestration
+langchain-core>=0.3.0        # LangChain core abstractions
+langchain-google-genai>=2.0.0  # Gemini 2.5 Flash integration
+
+# === Vector Embeddings ===
+sentence-transformers>=3.0.0 # all-MiniLM-L6-v2 (384-dim embeddings)
+numpy>=1.26.0                # Vector operations
+scikit-learn>=1.4.0          # Cosine similarity, clustering
+
+# === Database ===
+psycopg2-binary>=2.9.9       # PostgreSQL driver (Supabase)
+asyncpg>=0.29.0              # Async PostgreSQL for background jobs
+
+# === Knowledge Graph ===
+networkx>=3.2                # In-memory graph operations
+
+# === Serialization ===
+orjson>=3.9.0                # Fast JSON (3x faster than stdlib)
+msgpack>=1.0.0               # Binary serialization for checkpoints
+
+# === Scheduling (consolidation jobs) ===
+apscheduler>=3.10.0          # Background job scheduler
+
+# === HTTP ===
+httpx>=0.27.0                # Async HTTP client (Supabase uses this)
+
+# === Type checking ===
+pydantic>=2.5.0              # Data validation
+typing-extensions>=4.9.0     # Backported typing features

@@ -1,0 +1,58 @@
+# AfriMine AI — Cloudflare Workers Configuration
+# API proxy: edge → Railway backend
+# Frontend: Cloudflare Pages (configured separately)
+
+name = "afrimine-api"
+main = "src/index.js"
+compatibility_date = "2026-07-19"
+
+# ── Routes ───────────────────────────────────────
+routes = [
+  { pattern = "api.afrimine.com/*", zone_name = "afrimine.com" }
+]
+
+# ── Environment Variables ────────────────────────
+[vars]
+ENVIRONMENT = "production"
+RAILWAY_URL = "https://afrimine-langgraph-production.up.railway.app"
+ALLOWED_ORIGINS = "https://afrimine.com,https://www.afrimine.com"
+RATE_LIMIT_RPM = "100"
+
+# ── Staging Environment ──────────────────────────
+[env.staging]
+name = "afrimine-api-staging"
+routes = [
+  { pattern = "staging-api.afrimine.com/*", zone_name = "afrimine.com" }
+]
+
+[env.staging.vars]
+ENVIRONMENT = "staging"
+RAILWAY_URL = "https://afrimine-langgraph-staging.up.railway.app"
+ALLOWED_ORIGINS = "https://staging.afrimine.com,http://localhost:3000"
+RATE_LIMIT_RPM = "200"
+
+# ── Durable Objects (for distributed rate limiting) ──
+# Uncomment when rate limiting needs to be distributed across edge nodes
+# [[durable_objects.bindings]]
+# name = "RATE_LIMITER"
+# class_name = "RateLimiter"
+
+# ── KV Namespaces (for edge caching) ─────────────
+# [[kv_namespaces]]
+# binding = "CACHE"
+# id = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+# preview_id = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+
+# ── Analytics ─────────────────────────────────────
+[observability]
+enabled = true
+head_sampling_rate = 0.1
+
+# ── Build ─────────────────────────────────────────
+[build]
+command = "npm install"
+
+# ── Limits ────────────────────────────────────────
+# Free tier: 100K requests/day, 10ms CPU per request
+# Workers paid ($5/mo): 10M requests/month, 30s CPU
+# We stay on free tier for MVP
