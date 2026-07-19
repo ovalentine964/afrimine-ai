@@ -71,7 +71,7 @@ ThemeData _buildLightTheme() {
     useMaterial3: true,
     brightness: Brightness.light,
     colorSchemeSeed: primaryGreen,
-    scaffoldBackground: surfaceWhite,
+    scaffoldBackgroundColor: surfaceWhite,
 
     // AppBar
     appBarTheme: const AppBarTheme(
@@ -139,7 +139,7 @@ ThemeData _buildDarkTheme() {
     useMaterial3: true,
     brightness: Brightness.dark,
     colorSchemeSeed: primaryGreen,
-    scaffoldBackground: surfaceDark,
+    scaffoldBackgroundColor: surfaceDark,
 
     appBarTheme: const AppBarTheme(
       backgroundColor: cardDark,
