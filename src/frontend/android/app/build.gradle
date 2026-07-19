@@ -1,0 +1,104 @@
+plugins {
+    id "com.android.application"
+    id "kotlin-android"
+    id "dev.flutter.flutter-gradle-plugin"
+}
+
+// ── Read local.properties ────────────────────────────────────────────────
+def localProperties = new Properties()
+def localPropertiesFile = rootProject.file('local.properties')
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.withReader('UTF-8') { reader ->
+        localProperties.load(reader)
+    }
+}
+
+def flutterVersionCode = localProperties.getProperty('flutter.versionCode')
+if (flutterVersionCode == null) {
+    flutterVersionCode = '1'
+}
+
+def flutterVersionName = localProperties.getProperty('flutter.versionName')
+if (flutterVersionName == null) {
+    flutterVersionName = '1.0.0'
+}
+
+// ── Application build config ─────────────────────────────────────────────
+android {
+    namespace "com.afrimine.ai"
+    compileSdk 34
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    kotlinOptions {
+        jvmTarget = '1.8'
+    }
+
+    sourceSets {
+        main.java.srcDirs += 'src/main/kotlin'
+    }
+
+    defaultConfig {
+        applicationId "com.afrimine.ai"
+        minSdk 21          // Android 5.0 — covers 99% of African phones
+        targetSdk 34
+        versionCode flutterVersionCode.toInteger()
+        versionName flutterVersionName
+
+        // MultiDex not needed for minSdk 21+
+        multiDexEnabled false
+
+        // Pass API_URL from --dart-define to the app
+        manifestPlaceholders += [
+            API_URL: System.getenv("API_URL") ?: "https://api.afrimine.com"
+        ]
+    }
+
+    signingConfigs {
+        release {
+            // Use environment variables for CI/CD signing
+            if (System.getenv("KEYSTORE_PATH") != null) {
+                storeFile file(System.getenv("KEYSTORE_PATH"))
+                storePassword System.getenv("KEYSTORE_PASSWORD")
+                keyAlias System.getenv("KEY_ALIAS")
+                keyPassword System.getenv("KEY_PASSWORD")
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            signingConfig signingConfigs.release
+
+            // ProGuard / R8 — shrink & obfuscate for smaller APK
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+
+            // NDK filters — only build for common ABIs
+            ndk {
+                abiFilters 'arm64-v8a', 'armeabi-v7a'
+            }
+        }
+
+        debug {
+            // Debug builds: no minification, no signing required
+            minifyEnabled false
+            shrinkResources false
+            debuggable true
+        }
+    }
+}
+
+// ── Flutter build config ─────────────────────────────────────────────────
+flutter {
+    source '../..'
+}
+
+// ── Dependencies ─────────────────────────────────────────────────────────
+dependencies {
+    // No extra native deps needed — Flutter handles everything
+}

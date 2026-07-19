@@ -1,7 +1,7 @@
 # AfriMine AI — LangGraph Migration Dependencies
 # ================================================
 # Core framework: LangGraph 1.0 (GA) + LangChain ecosystem
-# LLM: Google Gemini 2.5 Flash (free tier: 1,500 req/day)
+# LLM: NVIDIA NIM (MiniMax M3) → Groq → Mistral → Ollama fallback
 # Checkpointer: PostgreSQL (Supabase free tier: 500MB)
 # Protocol: A2A (JSON-RPC 2.0) for Go ↔ Python bridge
 
@@ -13,7 +13,8 @@ langgraph-checkpoint-postgres>=2.0.0  # Supabase/Postgres checkpointer
 # --- LangChain Ecosystem ---
 langchain>=0.3.0               # Core LangChain (required by LangGraph)
 langchain-core>=0.3.0          # Core abstractions
-langchain-google-genai>=2.1.0  # Gemini 2.5 Flash integration
+langchain-openai>=0.3.0        # NVIDIA NIM (OpenAI-compatible) + Groq + Mistral
+langchain-groq>=0.2.0          # Groq integration (backup LLM)
 langchain-community>=0.3.0     # Community integrations
 
 # --- Database & State ---

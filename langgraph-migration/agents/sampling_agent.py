@@ -10,7 +10,7 @@ What it reads: location, sample_data, satellite_imagery.
 What it writes: sampling_result.
 
 Architecture notes:
-- Uses Gemini 2.5 Flash for spatial reasoning (grid layout, terrain analysis)
+- Uses NVIDIA NIM (MiniMax M3) for spatial reasoning (grid layout, terrain analysis)
 - No external tool calls — pure LLM reasoning over input data
 - Output is validated against GPS coordinate bounds (Kenya: -5°S to 5°N, 34°E to 42°E)
 """
@@ -21,7 +21,7 @@ import logging
 from typing import Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_openai import ChatOpenAI
 
 logger = logging.getLogger(__name__)
 
@@ -105,10 +105,11 @@ async def sampling_agent(state: dict[str, Any]) -> dict[str, Any]:
     logger.info(f"[{analysis_id}] Sampling Agent starting")
 
     try:
-        llm = ChatGoogleGenerativeAI(
-            model="gemini-2.5-flash",
+        # NVIDIA NIM via OpenAI-compatible API (fallback: Groq → Mistral → Ollama)
+        from llm_provider import get_llm_with_fallback
+        llm, _provider = get_llm_with_fallback(
             temperature=0.3,  # Low temp for consistent spatial reasoning
-            max_output_tokens=2048,
+            max_tokens=2048,
         )
 
         user_prompt = _build_user_prompt(state)

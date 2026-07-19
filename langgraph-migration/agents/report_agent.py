@@ -11,6 +11,7 @@ What it writes: report_result.
 
 Architecture notes:
 - This is the fan-in node — it waits for both parallel branches
+- Uses NVIDIA NIM (MiniMax M3) for report generation
 - Supports iterative refinement: if report quality is low, sets
   needs_refinement=True which loops back through Analysis
 - Max refinement iterations: 3 (controlled by graph.py routing)
@@ -25,7 +26,7 @@ import logging
 from typing import Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_openai import ChatOpenAI
 
 logger = logging.getLogger(__name__)
 
@@ -92,10 +93,11 @@ async def report_agent(state: dict[str, Any]) -> dict[str, Any]:
     )
 
     try:
-        llm = ChatGoogleGenerativeAI(
-            model="gemini-2.5-flash",
+        # NVIDIA NIM via OpenAI-compatible API (fallback: Groq → Mistral → Ollama)
+        from llm_provider import get_llm_with_fallback
+        llm, _provider = get_llm_with_fallback(
             temperature=0.4,  # Slightly higher for narrative writing
-            max_output_tokens=8192,
+            max_tokens=8192,
         )
 
         # Gather all upstream results

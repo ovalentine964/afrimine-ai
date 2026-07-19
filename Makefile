@@ -230,6 +230,24 @@ dev: ## Start local development (Go + Python)
 dev-flutter: ## Start Flutter development
 	flutter run -d chrome
 
+# ══════════════════════════════════════════════════
+# ANDROID APK
+# ══════════════════════════════════════════════════
+build-apk: ## Build release APK (split per ABI, arm64 + armv7)
+	@echo "$(GREEN)Building release APK...$(RESET)"
+	chmod +x scripts/build-apk.sh
+	API_URL=$${API_URL:-https://api.afrimine.com} ./scripts/build-apk.sh --api-url $$API_URL
+
+build-apk-debug: ## Build debug APK (no minification, for testing)
+	@echo "$(GREEN)Building debug APK...$(RESET)"
+	chmod +x scripts/build-apk.sh
+	./scripts/build-apk.sh --debug
+
+build-apk-local: ## Build release APK pointing to localhost:8080
+	@echo "$(GREEN)Building APK for local testing...$(RESET)"
+	chmod +x scripts/build-apk.sh
+	./scripts/build-apk.sh --api-url http://localhost:8080
+
 install-tools: ## Install development tools
 	@echo "$(GREEN)Installing development tools...$(RESET)"
 	go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest

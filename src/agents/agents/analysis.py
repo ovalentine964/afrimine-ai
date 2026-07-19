@@ -19,6 +19,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 
 from agents.base import create_llm, parse_json_response, retry_with_backoff, SECURITY_PREAMBLE
 from security.middleware import rate_limiter, sanitize_output
+from llm_provider import get_llm_with_fallback
 
 logger = logging.getLogger("afrimine.analysis")
 

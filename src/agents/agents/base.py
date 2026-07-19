@@ -15,9 +15,10 @@ import time
 from typing import Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_openai import ChatOpenAI
 
 from config import settings
+from llm_provider import get_llm_with_fallback
 
 logger = logging.getLogger("afrimine.agents")
 
@@ -84,27 +85,33 @@ async def retry_with_backoff(
 # ── LLM Initialization ───────────────────────────────────────────────────
 
 def create_llm(
-    model: str | None = None,
     temperature: float = 0.3,
     max_output_tokens: int = 4096,
-) -> ChatGoogleGenerativeAI:
+    provider: str | None = None,
+) -> ChatOpenAI:
     """
-    Create a Gemini 2.5 Flash LLM instance.
+    Create an LLM instance using the unified provider with fallback.
+
+    Fallback chain: NVIDIA NIM → Groq → Mistral → Ollama
 
     Args:
-        model: Model name (default: settings.GEMINI_MODEL)
         temperature: Sampling temperature
         max_output_tokens: Max output tokens
+        provider: Force a specific provider (None = auto-fallback)
 
     Returns:
-        ChatGoogleGenerativeAI instance
+        ChatOpenAI instance (works with NVIDIA NIM, Groq, Mistral, Ollama)
     """
-    return ChatGoogleGenerativeAI(
-        model=model or settings.GEMINI_MODEL,
+    if provider:
+        from llm_provider import get_llm
+        return get_llm(provider=provider, temperature=temperature, max_tokens=max_output_tokens)
+
+    llm, selected_provider = get_llm_with_fallback(
         temperature=temperature,
-        max_output_tokens=max_output_tokens,
-        google_api_key=settings.GOOGLE_API_KEY,
+        max_tokens=max_output_tokens,
     )
+    logger.info("LLM initialized: provider=%s, temp=%.1f, max_tokens=%d", selected_provider, temperature, max_output_tokens)
+    return llm
 
 
 # ── JSON Parsing ──────────────────────────────────────────────────────────
@@ -164,6 +171,7 @@ async def llm_json_call(
     messages = [SystemMessage(content=SECURITY_PREAMBLE + "\n" + system_prompt)]
 
     if image_url:
+        # Vision/multimodal: NVIDIA NIM supports image input via base64 in messages
         messages.append(
             HumanMessage(
                 content=[

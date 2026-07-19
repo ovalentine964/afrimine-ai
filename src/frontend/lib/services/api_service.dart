@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:logger/logger.dart';
 
+import '../config.dart';
 import '../models/analysis.dart';
 import '../models/sample.dart';
 import 'offline_service.dart';
@@ -31,9 +32,8 @@ class ApiConfig {
     this.timeout = const Duration(seconds: 60),
   }) : baseUrl = baseUrl ?? _defaultBaseUrl;
 
-  /// Read from --dart-define at compile time, fall back to production URL.
-  static const String _defaultBaseUrl =
-      String.fromEnvironment('API_URL', defaultValue: 'https://api.afrimine.com');
+  /// Read from --dart-define at compile time, fall back to config.
+  static const String _defaultBaseUrl = AppConfig.apiUrl;
 }
 
 /// Riverpod providers for API service.

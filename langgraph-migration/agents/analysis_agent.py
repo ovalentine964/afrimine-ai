@@ -2,7 +2,7 @@
 AfriMine AI — Analysis Agent
 ==============================
 
-Role: Classify minerals from photos using Gemini 2.5 Flash vision,
+Role: Classify minerals from photos using NVIDIA NIM (MiniMax M3) vision,
       estimate grades from XRF data, and flag if geological context is needed.
 
 When it runs: After Sampling Agent.
@@ -10,7 +10,7 @@ What it reads: sample_data, satellite_imagery, sampling_result.
 What it writes: analysis_result.
 
 Architecture notes:
-- Gemini 2.5 Flash has native vision — send photo as base64 inline
+- NVIDIA NIM supports multimodal (image via base64 in messages)
 - XRF data is parsed numerically (no LLM needed for raw readings)
 - Sets requires_geology_context flag for conditional routing
 - Pathfinder elements (As, Bi, Sb, Hg) trigger geology branch
@@ -23,7 +23,7 @@ import logging
 from typing import Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_openai import ChatOpenAI
 
 logger = logging.getLogger(__name__)
 
@@ -135,10 +135,11 @@ async def analysis_agent(state: dict[str, Any]) -> dict[str, Any]:
     logger.info(f"[{analysis_id}] Analysis Agent starting")
 
     try:
-        llm = ChatGoogleGenerativeAI(
-            model="gemini-2.5-flash",
+        # NVIDIA NIM via OpenAI-compatible API (fallback: Groq → Mistral → Ollama)
+        from llm_provider import get_llm_with_fallback
+        llm, _provider = get_llm_with_fallback(
             temperature=0.2,  # Very low for consistent classification
-            max_output_tokens=4096,
+            max_tokens=4096,
         )
 
         # Build multimodal message list

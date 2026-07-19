@@ -11,7 +11,7 @@ What it writes: geology_result.
 
 Architecture notes:
 - This is the most knowledge-intensive agent
-- Uses RAG-style prompting with Migori Belt geological knowledge
+- Uses NVIDIA NIM (MiniMax M3) with RAG-style prompting and Migori Belt geological knowledge
 - Pathfinder interpretation (As → Au correlation) is domain-critical
 - Runs in a PARALLEL branch with Market Agent (LangGraph fan-out)
 - Both branches must complete before Report Agent (fan-in)
@@ -24,7 +24,7 @@ import logging
 from typing import Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_openai import ChatOpenAI
 
 logger = logging.getLogger(__name__)
 
@@ -131,10 +131,11 @@ async def geology_agent(state: dict[str, Any]) -> dict[str, Any]:
     logger.info(f"[{analysis_id}] Geology Agent starting (parallel branch)")
 
     try:
-        llm = ChatGoogleGenerativeAI(
-            model="gemini-2.5-flash",
+        # NVIDIA NIM via OpenAI-compatible API (fallback: Groq → Mistral → Ollama)
+        from llm_provider import get_llm_with_fallback
+        llm, _provider = get_llm_with_fallback(
             temperature=0.3,
-            max_output_tokens=4096,
+            max_tokens=4096,
         )
 
         analysis = state.get("analysis_result", {})

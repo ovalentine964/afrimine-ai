@@ -6,9 +6,11 @@ Centralized configuration with environment variable loading, validation,
 feature flags, and sensible defaults. All secrets come from env vars —
 never hardcoded.
 
+LLM Provider: NVIDIA NIM (primary) → Groq → Mistral → Ollama
+
 Usage:
     from config import settings
-    print(settings.GEMINI_MODEL)
+    print(settings.NVIDIA_MODEL)
     print(settings.SUPABASE_URL)
 """
 
@@ -107,14 +109,17 @@ class Settings:
     SUPABASE_DB_PASSWORD: str = field(default_factory=lambda: _env("SUPABASE_DB_PASSWORD"))
 
     # ── LLM API Keys ──────────────────────────────────────────────────────
-    GOOGLE_API_KEY: str = field(default_factory=lambda: _env("GOOGLE_API_KEY", required=True))
+    NVIDIA_API_KEY: str = field(default_factory=lambda: _env("NVIDIA_API_KEY", required=True))
     GROQ_API_KEY: str = field(default_factory=lambda: _env("GROQ_API_KEY"))
     MISTRAL_API_KEY: str = field(default_factory=lambda: _env("MISTRAL_API_KEY"))
 
     # ── LLM Models ────────────────────────────────────────────────────────
-    GEMINI_MODEL: str = field(default_factory=lambda: _env("GEMINI_MODEL", "gemini-2.5-flash"))
+    NVIDIA_BASE_URL: str = field(default_factory=lambda: _env("NVIDIA_BASE_URL", "https://integrate.api.nvidia.com/v1"))
+    NVIDIA_MODEL: str = field(default_factory=lambda: _env("NVIDIA_MODEL", "minimax/minimax-m3"))
     GROQ_MODEL: str = field(default_factory=lambda: _env("GROQ_MODEL", "llama-3.3-70b-versatile"))
     MISTRAL_MODEL: str = field(default_factory=lambda: _env("MISTRAL_MODEL", "mistral-large-latest"))
+    OLLAMA_BASE_URL: str = field(default_factory=lambda: _env("OLLAMA_BASE_URL", "http://localhost:11434/v1"))
+    OLLAMA_MODEL: str = field(default_factory=lambda: _env("OLLAMA_MODEL", "llama3.3:70b"))
 
     # ── Observability ─────────────────────────────────────────────────────
     LANGSMITH_API_KEY: str = field(default_factory=lambda: _env("LANGSMITH_API_KEY"))
@@ -152,11 +157,12 @@ class Settings:
     @property
     def llm_fallback_chain(self) -> list[str]:
         """Ordered list of LLM providers to try on failure."""
-        chain = ["gemini"]
+        chain = ["nvidia"]
         if self.GROQ_API_KEY:
             chain.append("groq")
         if self.MISTRAL_API_KEY:
             chain.append("mistral")
+        chain.append("ollama")  # Always available as offline fallback
         return chain
 
     def validate(self) -> list[str]:
@@ -166,8 +172,8 @@ class Settings:
             warnings.append("CRITICAL: SUPABASE_URL not set — checkpointing and persistence disabled")
         if not self.SUPABASE_KEY:
             warnings.append("CRITICAL: SUPABASE_KEY not set — cannot connect to Supabase")
-        if not self.GOOGLE_API_KEY:
-            warnings.append("CRITICAL: GOOGLE_API_KEY not set — LLM calls will fail")
+        if not self.NVIDIA_API_KEY:
+            warnings.append("CRITICAL: NVIDIA_API_KEY not set — LLM calls will fail (set at build.nvidia.com)")
         if not self.GROQ_API_KEY:
             warnings.append("GROQ_API_KEY not set — no speed fallback")
         if not self.LANGSMITH_API_KEY:
@@ -181,8 +187,8 @@ class Settings:
             missing.append("SUPABASE_URL")
         if not self.SUPABASE_KEY:
             missing.append("SUPABASE_KEY")
-        if not self.GOOGLE_API_KEY:
-            missing.append("GOOGLE_API_KEY")
+        if not self.NVIDIA_API_KEY:
+            missing.append("NVIDIA_API_KEY")
         if missing:
             raise ValueError(
                 f"Missing required environment variables: {', '.join(missing)}. "

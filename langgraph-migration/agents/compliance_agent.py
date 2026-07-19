@@ -11,6 +11,7 @@ What it writes: compliance_result.
 
 Architecture notes:
 - This is the final gate — no output reaches the user without compliance check
+- Uses NVIDIA NIM (MiniMax M3) for regulatory analysis
 - Implements human-in-the-loop: if is_compliant=False, graph pauses for manual review
 - Kenya Mining Act 2016 key provisions are embedded in the prompt
 - Royalty calculation uses the market agent's deposit value
@@ -24,7 +25,7 @@ import logging
 from typing import Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_openai import ChatOpenAI
 
 logger = logging.getLogger(__name__)
 
@@ -150,10 +151,11 @@ async def compliance_agent(state: dict[str, Any]) -> dict[str, Any]:
     logger.info(f"[{analysis_id}] Compliance Agent starting")
 
     try:
-        llm = ChatGoogleGenerativeAI(
-            model="gemini-2.5-flash",
+        # NVIDIA NIM via OpenAI-compatible API (fallback: Groq → Mistral → Ollama)
+        from llm_provider import get_llm_with_fallback
+        llm, _provider = get_llm_with_fallback(
             temperature=0.2,  # Very low for regulatory accuracy
-            max_output_tokens=4096,
+            max_tokens=4096,
         )
 
         market = state.get("market_result", {})

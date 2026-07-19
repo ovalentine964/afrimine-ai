@@ -179,7 +179,7 @@ async def _cli_main():
     )
 
     logger.info("AfriMine AI — Pipeline Test")
-    logger.info(f"Model: {settings.GEMINI_MODEL}")
+    logger.info(f"Model: {settings.NVIDIA_MODEL} (via NVIDIA NIM)")
     logger.info(f"Checkpoint: {'Supabase' if settings.SUPABASE_URL else 'In-memory'}")
 
     pipeline = AfriMinePipeline(use_memory_checkpointer=True)
