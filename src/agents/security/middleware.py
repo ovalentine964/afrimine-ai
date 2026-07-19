@@ -82,6 +82,10 @@ class ClassificationResult:
     confidence: float
     matches: int
 
+    def __iter__(self):
+        """Allow tuple unpacking: label, score, matches = classify_input(text)"""
+        return iter((self.label, self.confidence, self.matches))
+
 
 def classify_input(text: str) -> ClassificationResult:
     """

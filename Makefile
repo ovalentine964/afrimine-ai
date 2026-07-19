@@ -46,7 +46,7 @@ build: build-go build-python build-flutter ## Build everything
 
 build-go: ## Build Go backend
 	@echo "$(GREEN)Building Go backend...$(RESET)"
-	CGO_ENABLED=0 go build -ldflags="-s -w" -o bin/afrimine-api ./cmd/api
+	CGO_ENABLED=0 go build -ldflags="-s -w" -o bin/afrimine-api .
 
 build-python: ## Install Python dependencies
 	@echo "$(GREEN)Installing Python dependencies...$(RESET)"
@@ -223,8 +223,8 @@ dev: ## Start local development (Go + Python)
 	@echo "Go API: http://localhost:8080"
 	@echo "Python Agents: http://localhost:8000"
 	@trap 'kill 0' EXIT; \
-	go run ./cmd/api & \
-	cd langgraph-migration && python -m uvicorn a2a_bridge:app --reload --port 8000 & \
+	go run . & \
+	cd ../agents && python -m uvicorn a2a_bridge:app --reload --port 8000 & \
 	wait
 
 dev-flutter: ## Start Flutter development

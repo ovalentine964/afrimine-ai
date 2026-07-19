@@ -24,6 +24,12 @@ from typing import Annotated, Any, Literal, TypedDict
 from langgraph.graph.message import add_messages
 
 
+# NOTE: All agents return plain dicts {"role": ..., "content": ...}.
+# add_messages works with both LangChain BaseMessage objects and plain dicts,
+# so we keep it for LangGraph compatibility. If issues arise, replace with:
+#   messages: Annotated[list, operator.add]
+
+
 # ---------------------------------------------------------------------------
 # Sub-schemas: structured outputs per agent
 # ---------------------------------------------------------------------------

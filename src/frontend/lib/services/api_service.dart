@@ -13,6 +13,11 @@ import 'offline_service.dart';
 final _logger = Logger(printer: PrettyPrinter(methodCount: 0));
 
 /// API configuration — set at startup from settings or env.
+///
+/// For local development, run with:
+///   flutter run --dart-define=API_URL=http://localhost:8080
+///
+/// For production, defaults to the production API.
 class ApiConfig {
   final String baseUrl;
   final String? supabaseUrl;
@@ -20,11 +25,15 @@ class ApiConfig {
   final Duration timeout;
 
   const ApiConfig({
-    this.baseUrl = 'https://api.afrimine.com',
+    String? baseUrl,
     this.supabaseUrl,
     this.supabaseAnonKey,
     this.timeout = const Duration(seconds: 60),
-  });
+  }) : baseUrl = baseUrl ?? _defaultBaseUrl;
+
+  /// Read from --dart-define at compile time, fall back to production URL.
+  static const String _defaultBaseUrl =
+      String.fromEnvironment('API_URL', defaultValue: 'https://api.afrimine.com');
 }
 
 /// Riverpod providers for API service.
@@ -199,7 +208,7 @@ class ApiService {
         'photo': await MultipartFile.fromFile(filePath),
       });
       final response = await _dio.post('/v1/samples/$sampleId/photos', data: formData);
-      return response.data['url'] as String?;
+      return response.data['photo_url'] as String?;
     } on DioException catch (e) {
       _logger.e('Photo upload failed: ${e.message}');
       return null;

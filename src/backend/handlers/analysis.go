@@ -1,10 +1,12 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -19,6 +21,10 @@ import (
 type AnalysisHandler struct {
 	a2aClient *a2a.Client
 	logger    *zap.Logger
+
+	// In-memory results cache (replace with Supabase in production)
+	results   map[string]*models.Analysis
+	resultsMu sync.RWMutex
 }
 
 // NewAnalysisHandler creates a new analysis handler.
@@ -26,6 +32,7 @@ func NewAnalysisHandler(a2aClient *a2a.Client, logger *zap.Logger) *AnalysisHand
 	return &AnalysisHandler{
 		a2aClient: a2aClient,
 		logger:    logger,
+		results:   make(map[string]*models.Analysis),
 	}
 }
 
@@ -80,8 +87,10 @@ func (h *AnalysisHandler) CreateAnalysis(w http.ResponseWriter, r *http.Request)
 		UpdatedAt: now,
 	}
 
-	// Store the pending analysis in Supabase.
-	// In production: supabaseClient.From("analyses").Insert(analysis).Execute()
+	// Store the pending analysis in cache (and Supabase in production).
+	h.resultsMu.Lock()
+	h.results[analysisID.String()] = &analysis
+	h.resultsMu.Unlock()
 
 	go func() {
 		// Run the pipeline asynchronously.
@@ -96,7 +105,6 @@ func (h *AnalysisHandler) CreateAnalysis(w http.ResponseWriter, r *http.Request)
 // runPipeline executes the A2A pipeline in the background.
 func (h *AnalysisHandler) runPipeline(analysisID uuid.UUID, userID string, sampleIDs []uuid.UUID) {
 	// In production: fetch sample data from Supabase.
-	// For now, use placeholder input.
 	input := map[string]interface{}{
 		"location": map[string]interface{}{
 			"lat":    -1.05,
@@ -112,7 +120,15 @@ func (h *AnalysisHandler) runPipeline(analysisID uuid.UUID, userID string, sampl
 
 	startTime := time.Now()
 
-	result, err := h.a2aClient.Invoke(nil, "afrimine-pipeline", input, userID)
+	// Update status to running.
+	h.resultsMu.Lock()
+	if a, ok := h.results[analysisID.String()]; ok {
+		a.Status = models.StatusRunning
+		a.UpdatedAt = time.Now().UTC()
+	}
+	h.resultsMu.Unlock()
+
+	result, err := h.a2aClient.Invoke(context.Background(), "afrimine-pipeline", input, userID)
 	duration := time.Since(startTime)
 
 	if err != nil {
@@ -121,7 +137,13 @@ func (h *AnalysisHandler) runPipeline(analysisID uuid.UUID, userID string, sampl
 			zap.Duration("duration", duration),
 			zap.Error(err),
 		)
-		// Update analysis status to failed in Supabase.
+		// Update status to failed.
+		h.resultsMu.Lock()
+		if a, ok := h.results[analysisID.String()]; ok {
+			a.Status = models.StatusFailed
+			a.UpdatedAt = time.Now().UTC()
+		}
+		h.resultsMu.Unlock()
 		return
 	}
 
@@ -133,8 +155,61 @@ func (h *AnalysisHandler) runPipeline(analysisID uuid.UUID, userID string, sampl
 		zap.Int64("duration_ms", duration.Milliseconds()),
 	)
 
-	// In production: update the analysis record in Supabase with full results.
-	// Parse result.AgentOutputs into models.AgentOutputs and store.
+	// Store pipeline results in cache.
+	h.resultsMu.Lock()
+	if a, ok := h.results[analysisID.String()]; ok {
+		a.Status = models.StatusCompleted
+		a.UpdatedAt = time.Now().UTC()
+		a.PipelineDurationMs = int(duration.Milliseconds())
+
+		// Parse agent outputs if available.
+		if result.AgentOutputs != nil {
+			if analysisOut, ok := result.AgentOutputs["analysis_result"].(map[string]interface{}); ok {
+				a.AgentOutputs.Analysis = &models.AnalysisResult{
+					DominantMineral:   fmt.Sprintf("%v", analysisOut["dominant_mineral"]),
+					OverallConfidence: parseFloat(analysisOut["overall_confidence"]),
+				}
+			}
+			if marketOut, ok := result.AgentOutputs["market_result"].(map[string]interface{}); ok {
+				a.EstimatedValueUSD = parseInt(marketOut["deposit_value_estimate_usd"])
+			}
+			if complianceOut, ok := result.AgentOutputs["compliance_result"].(map[string]interface{}); ok {
+				compliant, _ := complianceOut["is_compliant"].(bool)
+				a.AgentOutputs.Compliance = &models.ComplianceResult{
+					IsCompliant: compliant,
+				}
+			}
+		}
+	}
+	h.resultsMu.Unlock()
+}
+
+// parseFloat safely extracts a float64 from an interface{} value.
+func parseFloat(v interface{}) float64 {
+	switch n := v.(type) {
+	case float64:
+		return n
+	case int:
+		return float64(n)
+	case int64:
+		return float64(n)
+	default:
+		return 0.0
+	}
+}
+
+// parseInt safely extracts an int from an interface{} value.
+func parseInt(v interface{}) int {
+	switch n := v.(type) {
+	case float64:
+		return int(n)
+	case int:
+		return n
+	case int64:
+		return int(n)
+	default:
+		return 0
+	}
 }
 
 // GetAnalysis handles GET /v1/analyses/{analysisID}.
@@ -154,31 +229,14 @@ func (h *AnalysisHandler) GetAnalysis(w http.ResponseWriter, r *http.Request) {
 		zap.String("role", role),
 	)
 
-	// In production: query Supabase with RLS.
-	// Investors see only completed analyses with summaries.
-	// Field workers see their own analyses.
-	// Geologists see analyses in their region.
-	// Admins see all.
+	// Look up from results cache (in production: query Supabase with RLS).
+	h.resultsMu.RLock()
+	analysis, ok := h.results[analysisID]
+	h.resultsMu.RUnlock()
 
-	// Placeholder response.
-	analysis := models.Analysis{
-		ID:     uuid.MustParse(analysisID),
-		UserID: uuid.MustParse(userID),
-		Status: models.StatusCompleted,
-		AgentOutputs: models.AgentOutputs{
-			Analysis: &models.AnalysisResult{
-				DominantMineral:   "gold",
-				OverallConfidence: 0.85,
-				RockType:          "quartz vein",
-				Alteration:        "sericitization",
-			},
-		},
-		DetectedMinerals:  []string{"gold", "arsenopyrite", "pyrite"},
-		EstimatedGrade:    5.2,
-		ConfidenceScore:   0.85,
-		EstimatedValueUSD: 125000,
-		CreatedAt:         time.Now().UTC(),
-		UpdatedAt:         time.Now().UTC(),
+	if !ok {
+		writeError(w, http.StatusNotFound, "analysis not found")
+		return
 	}
 
 	writeJSON(w, http.StatusOK, analysis)
@@ -243,10 +301,6 @@ func (h *AnalysisHandler) StreamAnalysis(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// In production: subscribe to Supabase Realtime channel for this analysis.
-	// Or use the A2A streaming endpoint.
-	// For now, send a progress event and complete.
-
 	// Send initial status.
 	sendSSE(w, flusher, models.AnalysisStreamEvent{
 		ID:     analysisID,
@@ -255,24 +309,70 @@ func (h *AnalysisHandler) StreamAnalysis(w http.ResponseWriter, r *http.Request)
 		Output: map[string]string{"agent": "Sampling Agent", "status": "started"},
 	})
 
-	// Simulate agent progress (in production, this comes from the A2A stream).
-	agents := []string{"analysis", "geology", "market", "report", "compliance"}
-	for _, agent := range agents {
+	// Build A2A input for real streaming.
+	input := map[string]interface{}{
+		"location": map[string]interface{}{
+			"lat":    -1.05,
+			"lon":    34.55,
+			"region": "Nyatike",
+			"county": "Migori",
+		},
+		"sample_data": map[string]interface{}{
+			"sample_id": analysisID,
+		},
+	}
+
+	// Stream real events from the A2A bridge.
+	_, err := h.a2aClient.InvokeStream(r.Context(), "afrimine-pipeline", input, userID, func(event a2a.StreamEvent) {
 		select {
 		case <-r.Context().Done():
 			return
 		default:
 		}
 
+		h.logger.Debug("SSE forwarding event",
+			zap.String("analysis_id", analysisID),
+			zap.String("node", event.Node),
+			zap.String("status", event.Status),
+		)
+
+		eventStatus := "working"
+		if event.Status == "completed" || event.Status == "failed" {
+			eventStatus = event.Status
+		}
+
+		outputMap := make(map[string]string)
+		for k, v := range event.Output {
+			if s, ok := v.(string); ok {
+				outputMap[k] = s
+			} else {
+				b, _ := json.Marshal(v)
+				outputMap[k] = string(b)
+			}
+		}
+
 		sendSSE(w, flusher, models.AnalysisStreamEvent{
 			ID:     analysisID,
-			Status: "working",
-			Node:   agent,
-			Output: map[string]string{"agent": agent, "status": "completed"},
+			Status: eventStatus,
+			Node:   event.Node,
+			Output: outputMap,
 		})
+	})
+
+	if err != nil {
+		h.logger.Error("SSE stream error",
+			zap.String("analysis_id", analysisID),
+			zap.Error(err),
+		)
+		sendSSE(w, flusher, models.AnalysisStreamEvent{
+			ID:      analysisID,
+			Status:  "failed",
+			Output:  map[string]string{"error": err.Error()},
+		})
+		return
 	}
 
-	// Final event.
+	// Final completion event.
 	sendSSE(w, flusher, models.AnalysisStreamEvent{
 		ID:     analysisID,
 		Status: "completed",

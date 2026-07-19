@@ -31,7 +31,25 @@ COPPER_LB_TO_KG = 0.453592
 
 
 async def _fetch_gold_price() -> float:
-    """Fetch current gold price in USD/oz with fallback."""
+    """Fetch current gold price in USD/oz with multiple fallbacks."""
+
+    # Source 1: metals.live (free, no auth, lightweight)
+    try:
+        import httpx
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get("https://api.metals.live/v1/spot/gold")
+            if resp.status_code == 200:
+                data = resp.json()
+                if data and isinstance(data, list) and len(data) > 0:
+                    price = float(data[0].get("price", 0))
+                    if price > 0:
+                        # metals.live returns price per oz
+                        logger.info(f"Gold price fetched: ${price:,.2f}/oz (metals.live)")
+                        return price
+    except Exception as e:
+        logger.debug(f"metals.live gold fetch failed: {e}")
+
+    # Source 2: yfinance (requires pandas)
     try:
         import yfinance as yf
         ticker = yf.Ticker("GC=F")
@@ -40,13 +58,37 @@ async def _fetch_gold_price() -> float:
             price = float(hist["Close"].iloc[-1])
             logger.info(f"Gold price fetched: ${price:,.2f}/oz (yfinance)")
             return price
+    except ImportError:
+        logger.debug("yfinance not available (pandas not installed)")
     except Exception as e:
-        logger.warning(f"Gold price fetch failed: {e}")
-    return 2350.0  # Fallback
+        logger.debug(f"yfinance gold fetch failed: {e}")
+
+    # Source 3: Hardcoded fallback
+    logger.warning("All gold price sources failed — using fallback price $2,350/oz")
+    return 2350.0
 
 
 async def _fetch_copper_price() -> float:
-    """Fetch current copper price in USD/lb with fallback."""
+    """Fetch current copper price in USD/lb with multiple fallbacks."""
+
+    # Source 1: metals.live
+    try:
+        import httpx
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get("https://api.metals.live/v1/spot/copper")
+            if resp.status_code == 200:
+                data = resp.json()
+                if data and isinstance(data, list) and len(data) > 0:
+                    price_per_kg = float(data[0].get("price", 0))
+                    if price_per_kg > 0:
+                        # Convert from USD/kg to USD/lb
+                        price_per_lb = price_per_kg * 0.453592
+                        logger.info(f"Copper price fetched: ${price_per_lb:,.2f}/lb (metals.live)")
+                        return price_per_lb
+    except Exception as e:
+        logger.debug(f"metals.live copper fetch failed: {e}")
+
+    # Source 2: yfinance
     try:
         import yfinance as yf
         ticker = yf.Ticker("HG=F")
@@ -55,9 +97,14 @@ async def _fetch_copper_price() -> float:
             price = float(hist["Close"].iloc[-1])
             logger.info(f"Copper price fetched: ${price:,.2f}/lb (yfinance)")
             return price
+    except ImportError:
+        logger.debug("yfinance not available (pandas not installed)")
     except Exception as e:
-        logger.warning(f"Copper price fetch failed: {e}")
-    return 4.20  # Fallback
+        logger.debug(f"yfinance copper fetch failed: {e}")
+
+    # Source 3: Hardcoded fallback
+    logger.warning("All copper price sources failed — using fallback price $4.20/lb")
+    return 4.20
 
 
 def _calculate_cut_off_grade(

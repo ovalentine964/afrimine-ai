@@ -40,7 +40,7 @@ func (h *SampleHandler) Routes(r chi.Router) {
 	r.Get("/{sampleID}", h.GetSample)
 	r.Put("/{sampleID}", h.UpdateSample)
 	r.Delete("/{sampleID}", h.DeleteSample)
-	r.Post("/{sampleID}/photo", h.UploadPhoto)
+	r.Post("/{sampleID}/photos", h.UploadPhoto)
 }
 
 // CreateSample handles POST /v1/samples — creates a new mineral sample.

@@ -12,12 +12,156 @@ Usage:
 
 from __future__ import annotations
 
+import json
 import logging
+import time
 from typing import Any
 
 from config import settings
 
 logger = logging.getLogger("afrimine.checkpoint")
+
+
+class SupabaseCheckpointer:
+    """
+    Supabase-backed checkpoint saver for LangGraph.
+
+    Stores checkpoint data in the `langgraph_checkpoints` table.
+    Falls back gracefully if Supabase is unavailable.
+    """
+
+    def __init__(
+        self,
+        supabase_url: str,
+        supabase_key: str,
+        max_checkpoints_per_thread: int = 50,
+    ):
+        self._max_per_thread = max_checkpoints_per_thread
+        self._client = None
+        self._table = "langgraph_checkpoints"
+
+        try:
+            from supabase import create_client
+            self._client = create_client(supabase_url, supabase_key)
+            logger.info("Supabase checkpointer initialized (table=%s)", self._table)
+        except Exception as e:
+            logger.error("Failed to create Supabase client: %s", e)
+            raise
+
+    def put(self, config: dict, checkpoint: dict, metadata: dict) -> None:
+        """Save a checkpoint to Supabase."""
+        if not self._client:
+            return
+
+        thread_id = config.get("configurable", {}).get("thread_id", "unknown")
+        checkpoint_id = checkpoint.get("id", str(int(time.time() * 1000)))
+
+        try:
+            row = {
+                "thread_id": thread_id,
+                "checkpoint_id": checkpoint_id,
+                "checkpoint_json": json.dumps(checkpoint),
+                "metadata_json": json.dumps(metadata),
+                "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            }
+            self._client.table(self._table).upsert(
+                row, on_conflict="thread_id,checkpoint_id"
+            ).execute()
+
+            # Prune old checkpoints for this thread
+            self._prune(thread_id)
+
+            logger.debug("Checkpoint saved: thread=%s id=%s", thread_id, checkpoint_id)
+        except Exception as e:
+            logger.warning("Failed to save checkpoint: %s", e)
+
+    def get(self, config: dict) -> dict | None:
+        """Retrieve the latest checkpoint for a thread."""
+        if not self._client:
+            return None
+
+        thread_id = config.get("configurable", {}).get("thread_id", "")
+        if not thread_id:
+            return None
+
+        try:
+            result = (
+                self._client.table(self._table)
+                .select("checkpoint_json")
+                .eq("thread_id", thread_id)
+                .order("created_at", desc=True)
+                .limit(1)
+                .execute()
+            )
+            if result.data:
+                return json.loads(result.data[0]["checkpoint_json"])
+        except Exception as e:
+            logger.warning("Failed to get checkpoint: %s", e)
+
+        return None
+
+    def list(self, config: dict, limit: int = 10) -> list[dict]:
+        """List checkpoints for a thread."""
+        if not self._client:
+            return []
+
+        thread_id = config.get("configurable", {}).get("thread_id", "")
+        if not thread_id:
+            return []
+
+        try:
+            result = (
+                self._client.table(self._table)
+                .select("checkpoint_id,metadata_json,created_at")
+                .eq("thread_id", thread_id)
+                .order("created_at", desc=True)
+                .limit(limit)
+                .execute()
+            )
+            return [
+                {
+                    "id": row["checkpoint_id"],
+                    "metadata": json.loads(row.get("metadata_json", "{}")),
+                    "created_at": row["created_at"],
+                }
+                for row in (result.data or [])
+            ]
+        except Exception as e:
+            logger.warning("Failed to list checkpoints: %s", e)
+            return []
+
+    def _prune(self, thread_id: str) -> None:
+        """Remove old checkpoints beyond the per-thread limit."""
+        if not self._client:
+            return
+        try:
+            # Get count
+            count_result = (
+                self._client.table(self._table)
+                .select("checkpoint_id", count="exact")
+                .eq("thread_id", thread_id)
+                .execute()
+            )
+            total = count_result.count if hasattr(count_result, "count") else 0
+            if total is None:
+                total = len(count_result.data or [])
+
+            if total > self._max_per_thread:
+                # Delete oldest
+                old = (
+                    self._client.table(self._table)
+                    .select("checkpoint_id")
+                    .eq("thread_id", thread_id)
+                    .order("created_at", desc=False)
+                    .limit(total - self._max_per_thread)
+                    .execute()
+                )
+                for row in (old.data or []):
+                    self._client.table(self._table).delete().eq(
+                        "checkpoint_id", row["checkpoint_id"]
+                    ).execute()
+        except Exception as e:
+            logger.debug("Checkpoint pruning failed (non-fatal): %s", e)
 
 
 def create_checkpointer(use_memory: bool = False) -> Any:
@@ -29,7 +173,7 @@ def create_checkpointer(use_memory: bool = False) -> Any:
                     If False, use Supabase PostgreSQL (production).
 
     Returns:
-        A BaseCheckpointSaver instance.
+        A checkpoint saver instance compatible with LangGraph.
     """
     if use_memory:
         logger.info("Using in-memory checkpointer (testing mode)")
@@ -45,19 +189,6 @@ def create_checkpointer(use_memory: bool = False) -> Any:
 
     logger.info("Creating Supabase checkpointer")
     try:
-        # Try the dedicated Supabase checkpointer from memory-system/
-        import sys
-        import os
-
-        # Add memory-system to path for imports
-        memory_sys_path = os.path.join(
-            os.path.dirname(__file__), "..", "..", "..", "memory-system"
-        )
-        if os.path.isdir(memory_sys_path):
-            sys.path.insert(0, os.path.abspath(memory_sys_path))
-
-        from supabase_checkpointer import SupabaseCheckpointer
-
         checkpointer = SupabaseCheckpointer(
             supabase_url=settings.SUPABASE_URL,
             supabase_key=settings.SUPABASE_KEY,
