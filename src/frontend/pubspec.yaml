@@ -28,7 +28,7 @@ dependencies:
   # Camera & Location
   camera: ^0.11.0+2
   geolocator: ^12.0.0
-  permission_handler: ^10.4.5  # Pinned for vosk_flutter compatibility
+  permission_handler: ^11.3.1
   image: ^4.2.0
 
   # Maps
@@ -38,8 +38,8 @@ dependencies:
   flutter_tts: ^4.0.2
   record: ^5.1.2
   audioplayers: ^5.2.1
-  vosk_flutter: ^0.3.45
-  # NOTE: vosk_flutter pins permission_handler ^10.x — do not upgrade permission_handler
+  # vosk_flutter: ^0.3.45  # TEMPORARILY REMOVED — dependency conflicts with http & permission_handler
+  # Voice input via record package instead; Vosk integration will use platform channel later
 
   # Connectivity
   connectivity_plus: ^6.0.3
